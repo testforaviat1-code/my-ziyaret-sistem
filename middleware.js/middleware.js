@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server'
-
+ 
 export function middleware(request) {
-  // Test: Herkesi Google'a gönder
-  return NextResponse.redirect(new URL('https://www.google.com', request.url))
+  // Eğer zaten /bakim sayfasındaysan veya statik bir dosyaya gidiyorsan döngüye girmemesi için:
+  if (request.nextUrl.pathname === '/bakim' || request.nextUrl.pathname.includes('.')) {
+    return NextResponse.next()
+  }
+
+  // Tüm trafiği bakım sayfasına yönlendir
+  return NextResponse.redirect(new URL('/bakim', request.url))
 }
 
 export const config = {
-  matcher: '/:path*',
+  // API rotaları hariç her şeyi kapsar
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 }
