@@ -1,16 +1,23 @@
 import { NextResponse } from 'next/server'
- 
+
 export function middleware(request) {
-  // Eğer zaten /bakim sayfasındaysan veya statik bir dosyaya gidiyorsan döngüye girmemesi için:
-  if (request.nextUrl.pathname === '/bakim' || request.nextUrl.pathname.includes('.')) {
+  const { pathname } = request.nextUrl
+
+  // 1. İzin verilen yollar: Bakım sayfası, statik dosyalar (resimler), API ve Next.js sistem dosyaları
+  if (
+    pathname === '/bakim' ||
+    pathname.startsWith('/_next') || 
+    pathname.startsWith('/api') ||
+    pathname.includes('.') // favicon.ico, logo.png gibi dosyalar için
+  ) {
     return NextResponse.next()
   }
 
-  // Tüm trafiği bakım sayfasına yönlendir
+  // 2. Geriye kalan HER ŞEYİ bakım sayfasına postala
   return NextResponse.redirect(new URL('/bakim', request.url))
 }
 
 export const config = {
-  // API rotaları hariç her şeyi kapsar
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  // Karmaşık regex yerine her şeyi yakalayan basit yıldız kullanıyoruz
+  matcher: '/:path*',
 }
