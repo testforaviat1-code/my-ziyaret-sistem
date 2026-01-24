@@ -1,102 +1,182 @@
-'use client'
-import { useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { useRouter } from 'next/navigation'
+"use client";
+import { useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
+import { 
+  Lock, Mail, ArrowRight, Eye, EyeOff, 
+  Plane, AlertCircle 
+} from "lucide-react";
 
 export default function LoginPage() {
-  const [idKod, setIdKod] = useState('')
-  const [sifre, setSifre] = useState('')
-  const [hata, setHata] = useState<string | null>(null)
-  const [yukleniyor, setYukleniyor] = useState(false)
-  const router = useRouter()
-  const supabase = createClientComponentClient()
+  const router = useRouter();
+  
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
-  const girisYap = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setYukleniyor(true)
-    setHata(null)
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
 
-    // 1. ID Kodu'nu E-Posta formatına çevir (Arka Planda)
-    // Örnek: Kullanıcı '100001' girerse, sistem '100001@myinfotr.com' dener.
-    const email = `${idKod}@myinfotr.com`
+    try {
+      // 1. Supabase Auth Giriş
+      const { data: { user }, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    // 2. Supabase ile Giriş Yap
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password: sifre,
-    })
+      if (authError || !user) throw new Error("E-posta adresiniz veya şifreniz hatalı.");
 
-    if (error) {
-      setHata('Hatalı ID veya Şifre! Lütfen tekrar deneyin.')
-      setYukleniyor(false)
-      return
-    }
-
-    // 3. Giriş Başarılı ise ROLÜ ÖĞRENMEK için veritabanına bak
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (user) {
-      // Profiles tablosundan bu kullanıcının rolünü çek
-      const { data: profil } = await supabase
-        .from('profiles')
+      // 2. Profil Kontrolü (Yetki var mı?)
+      const { data: profil, error: profilError } = await supabase
+        .from('profiller')
         .select('rol')
         .eq('id', user.id)
-        .single()
+        .single();
 
-      // 4. Role Göre Yönlendir
-      if (profil?.rol === 'guvenlik') {
-        router.push('/guvenlik-paneli') // Güvenlik personelini kendi sayfasına at
-      } else if (profil?.rol === 'admin') {
-        router.push('/yonetim-paneli') // Yöneticiyi admin sayfasına at
-      } else {
-        router.push('/') // Standart personeli talep sayfasına at
+      if (profilError || !profil) {
+        await supabase.auth.signOut();
+        throw new Error("Kullanıcı profiliniz sistemde bulunamadı.");
       }
+
+      // 3. YÖNLENDİRME: HERKES ÖNCE ANA MENÜYE (HUB) GİDER
+      router.push("/"); 
+
+    } catch (err: any) {
+      console.error("Login Hatası:", err);
+      setError(err.message || "Beklenmedik bir hata oluştu.");
+    } finally {
+      setLoading(false);
     }
-    
-    router.refresh()
-  }
+  };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100">
-      <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-md">
-        <h2 className="text-2xl font-bold text-center mb-6 text-gray-800">MyInfoTR Giriş</h2>
-        
-        <form onSubmit={girisYap} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Personel / Güvenlik ID</label>
-            <input
-              type="text"
-              placeholder="Örn: 100001"
-              value={idKod}
-              onChange={(e) => setIdKod(e.target.value)}
-              className="w-full mt-1 p-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none text-black"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Şifre</label>
-            <input
-              type="password"
-              placeholder="******"
-              value={sifre}
-              onChange={(e) => setSifre(e.target.value)}
-              className="w-full mt-1 p-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none text-black"
-              required
-            />
-          </div>
-
-          {hata && <div className="text-red-500 text-sm text-center font-bold">{hata}</div>}
-
-          <button
-            type="submit"
-            disabled={yukleniyor}
-            className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition disabled:opacity-50 font-semibold"
-          >
-            {yukleniyor ? 'Giriş Yapılıyor...' : 'Sisteme Giriş Yap'}
-          </button>
-        </form>
+    <main className="min-h-screen relative flex font-sans overflow-hidden bg-slate-900">
+      
+      {/* ARKAPLAN */}
+      <div className="absolute inset-0 z-0">
+         <img 
+           src="/thy_gok.jpg" 
+           alt="THY Login Background" 
+           className="w-full h-full object-cover opacity-60 animate-in fade-in duration-[1500ms]" 
+         />
+         <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900/90 to-slate-900/60"></div>
       </div>
-    </div>
-  )
+
+      {/* SOL TARAF (LOGO & SLOGAN - BURASI AYNI KALDI) */}
+      <div className="hidden lg:flex w-1/2 relative z-10 items-center justify-center p-12">
+        <div className="max-w-lg w-full space-y-8">
+           <div className="flex items-center gap-4 animate-in slide-in-from-left duration-700">
+              <div className="bg-red-600 p-3 rounded-2xl shadow-lg shadow-red-900/50">
+                <Plane className="text-white transform -rotate-12" size={36} fill="currentColor" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-black tracking-widest uppercase text-white leading-none">THY SECURITY</h1>
+                <p className="text-[10px] text-red-500 font-mono tracking-[0.4em] uppercase mt-1">Access Control v2.0</p>
+              </div>
+           </div>
+           
+           <div className="space-y-4 animate-in slide-in-from-bottom duration-700 delay-100">
+             <h2 className="text-5xl font-bold leading-tight text-white">
+               Güvenli Erişim <br/> 
+               <span className="text-red-500">Tek Noktada.</span>
+             </h2>
+             <p className="text-slate-400 text-lg leading-relaxed font-medium">
+               Ziyaretçi yönetim sistemi, saha operasyonları ve idari denetim mekanizması artık tek bir panel üzerinden yönetilmektedir.
+             </p>
+           </div>
+        </div>
+      </div>
+
+      {/* SAĞ TARAF (FORM - GÜNCELLENDİ) */}
+      <div className="w-full lg:w-1/2 relative z-10 flex items-center justify-center p-6">
+         <div className="max-w-md w-full bg-white/10 backdrop-blur-xl border border-white/20 p-8 md:p-10 rounded-[2rem] shadow-2xl animate-in slide-in-from-right duration-700">
+            <div className="text-center mb-10">
+               {/* --- DEĞİŞİKLİK BAŞLANGICI --- */}
+               <div className="flex justify-center mb-4">
+                  {/* Kırmızı yuvarlak uçak yerine TSS Logosu */}
+                  <img src="/tss.png" alt="TSS Logo" className="h-16 w-auto object-contain drop-shadow-md" />
+               </div>
+               {/* THY PORTAL yerine TSS PORTAL */}
+               <h2 className="text-2xl font-black text-white tracking-tight">TSS PORTAL</h2>
+               {/* --- DEĞİŞİKLİK BİTİŞİ --- */}
+               <p className="text-slate-400 mt-2 text-sm font-medium">Kurumsal Giriş Ekranı</p>
+            </div>
+
+            {error && (
+              <div className="bg-red-500/20 backdrop-blur-md border border-red-500/50 text-white p-4 mb-6 rounded-xl shadow-lg text-sm font-bold flex items-start gap-3 animate-in shake">
+                <AlertCircle size={20} className="shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleLogin} className="space-y-6">
+               <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-400 uppercase ml-1">Kurumsal E-Posta</label>
+                  <div className="relative group">
+                     <Mail className="absolute left-4 top-4 text-slate-500 group-focus-within:text-white transition-colors" size={20} />
+                     <input 
+                       type="email" 
+                       value={email}
+                       onChange={(e) => setEmail(e.target.value)}
+                       className="w-full pl-12 pr-4 py-3.5 bg-slate-950/50 border border-white/10 rounded-xl text-white font-bold focus:ring-2 focus:ring-red-500/50 focus:border-red-500/50 outline-none transition-all placeholder:text-slate-600"
+                       placeholder="ad.soyad@thy.com"
+                       required
+                     />
+                  </div>
+               </div>
+
+               <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-400 uppercase ml-1">Şifre</label>
+                  <div className="relative group">
+                     <Lock className="absolute left-4 top-4 text-slate-500 group-focus-within:text-white transition-colors" size={20} />
+                     <input 
+                       type={showPassword ? "text" : "password"}
+                       value={password}
+                       onChange={(e) => setPassword(e.target.value)}
+                       className="w-full pl-12 pr-12 py-3.5 bg-slate-950/50 border border-white/10 rounded-xl text-white font-bold focus:ring-2 focus:ring-red-500/50 focus:border-red-500/50 outline-none transition-all placeholder:text-slate-600"
+                       placeholder="••••••••"
+                       required
+                     />
+                     <button 
+                       type="button"
+                       onClick={() => setShowPassword(!showPassword)}
+                       className="absolute right-4 top-4 text-slate-500 hover:text-white transition-colors"
+                     >
+                       {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
+                     </button>
+                  </div>
+               </div>
+
+               <button 
+                 type="submit" 
+                 disabled={loading}
+                 className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white py-4 rounded-xl font-black text-lg shadow-lg shadow-red-900/50 transform active:scale-95 transition-all flex items-center justify-center gap-2 group border border-red-500/50 mt-6 disabled:opacity-70 disabled:cursor-not-allowed"
+               >
+                 {loading ? (
+                   <span className="flex items-center gap-2">
+                     <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                     Doğrulanıyor...
+                   </span>
+                 ) : (
+                   <>
+                     Giriş Yap <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform"/>
+                   </>
+                 )}
+               </button>
+            </form>
+
+            <div className="mt-10 pt-6 border-t border-white/5 text-center">
+               <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                 © 2026 THY Teknik A.Ş. <br/> 
+                 <span className="opacity-50">Güvenlik Direktörlüğü & Bilgi Teknolojileri</span>
+               </p>
+            </div>
+         </div>
+      </div>
+    </main>
+  );
 }

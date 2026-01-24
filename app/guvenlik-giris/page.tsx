@@ -29,19 +29,27 @@ export default function GuvenlikGiris() {
 
       if (authError || !user) throw new Error("Sicil no (E-posta) veya şifre hatalı.");
 
-      // 2. YETKİ KONTROLÜ (SADECE GÜVENLİKÇİLER)
-      const { data: personelKaydi } = await supabase
-        .from('personel_profilleri')
-        .select('id, kampus_id')
-        .eq('user_id', user.id)
+      // 2. YETKİ KONTROLÜ (GÜNCELLENDİ: 'profiller' TABLOSU)
+      // Artık 'personel_profilleri' değil 'profiller' tablosuna bakıyoruz.
+      const { data: profil, error: profilError } = await supabase
+        .from('profiller')
+        .select('rol, kampus_id')
+        .eq('id', user.id)
         .single();
 
-      if (!personelKaydi) {
-        await supabase.auth.signOut();
-        throw new Error("Erişim Reddedildi: Bu panel sadece Saha/Güvenlik Personeli içindir. İdari giriş için diğer paneli kullanınız.");
+      if (profilError || !profil) {
+         await supabase.auth.signOut();
+         throw new Error("Profil bilgisi bulunamadı.");
       }
 
-      // 3. Giriş Başarılı
+      // Yetki Kontrolü: Sadece Güvenlik ve Admin girebilir
+      if (profil.rol !== 'guvenlik' && profil.rol !== 'admin') {
+        await supabase.auth.signOut();
+        throw new Error("Erişim Reddedildi: Bu panele giriş yetkiniz yok.");
+      }
+
+      // 3. Giriş Başarılı -> Panele Yönlendir
+      // Admin ise oradaki seçiciye, güvenlik ise kendi ekranına düşecek.
       router.push("/guvenlik-panel");
 
     } catch (err: any) {
@@ -52,14 +60,16 @@ export default function GuvenlikGiris() {
   };
 
   return (
-    <main className="min-h-screen relative flex font-sans overflow-hidden">
+    <main className="min-h-screen relative flex font-sans overflow-hidden bg-slate-900">
       
       {/* --- 1. FULL EKRAN ARKAPLAN (UÇAK & PERDE) --- */}
       <div className="absolute inset-0 z-0">
+         {/* Görsel ismini projedeki görseline göre ayarla, örn: /ucak1.avif veya /thyuc.jpg */}
          <img 
            src="/ucak1.avif" 
            alt="TSS Operasyon" 
            className="w-full h-full object-cover scale-105 animate-in fade-in duration-[2000ms]" 
+           onError={(e) => (e.currentTarget.src = "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2074&auto=format&fit=crop")} // Yedek görsel
          />
          {/* Koyu Lacivert Filtre */}
          <div className="absolute inset-0 bg-gradient-to-r from-slate-900/95 via-slate-900/85 to-slate-900/60"></div>
@@ -126,7 +136,7 @@ export default function GuvenlikGiris() {
                        value={email}
                        onChange={(e) => setEmail(e.target.value)}
                        className="w-full pl-12 pr-4 py-3 bg-slate-950/50 border border-white/10 rounded-xl text-white font-bold focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 outline-none transition-all placeholder:text-slate-600"
-                       placeholder="ahmet.yilmaz@tss.com"
+                       placeholder="ad.soyad@thy.com"
                        required
                      />
                   </div>
@@ -172,8 +182,7 @@ export default function GuvenlikGiris() {
 
             <div className="mt-8 pt-6 border-t border-white/5 text-center">
                <p className="text-xs text-slate-500 font-medium">
-                 © 2026 TSS Teknoloji A.Ş. <br/> 
-                 Yönetici girişi için <a href="/idari-giris" className="text-emerald-500 font-bold hover:underline hover:text-emerald-400 transition-colors">buraya tıklayınız.</a>
+                 © 2026 TSS Teknoloji A.Ş.
                </p>
             </div>
 
