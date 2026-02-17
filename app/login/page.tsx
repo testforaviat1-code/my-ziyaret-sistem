@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { 
   Lock, Mail, ArrowRight, Eye, EyeOff, 
-  Plane, AlertCircle 
+  AlertCircle 
 } from "lucide-react";
 
 export default function LoginPage() {
@@ -22,7 +22,6 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      // 1. Supabase Auth Giriş
       const { data: { user }, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -30,7 +29,6 @@ export default function LoginPage() {
 
       if (authError || !user) throw new Error("E-posta adresiniz veya şifreniz hatalı.");
 
-      // 2. Profil Kontrolü (Yetki var mı?)
       const { data: profil, error: profilError } = await supabase
         .from('profiller')
         .select('rol')
@@ -42,7 +40,6 @@ export default function LoginPage() {
         throw new Error("Kullanıcı profiliniz sistemde bulunamadı.");
       }
 
-      // 3. YÖNLENDİRME: HERKES ÖNCE ANA MENÜYE (HUB) GİDER
       router.push("/"); 
 
     } catch (err: any) {
@@ -56,33 +53,33 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen relative flex font-sans overflow-hidden bg-slate-900">
       
-      {/* ARKAPLAN */}
+      {/* 1. ARKAPLAN (UÇAK TEMASI) */}
       <div className="absolute inset-0 z-0">
          <img 
            src="/thy_gok.jpg" 
-           alt="THY Login Background" 
-           className="w-full h-full object-cover opacity-60 animate-in fade-in duration-[1500ms]" 
+           alt="THY Background" 
+           className="w-full h-full object-cover opacity-60" 
          />
-         <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900/90 to-slate-900/60"></div>
+         <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900/80 to-slate-900/60"></div>
       </div>
 
-      {/* SOL TARAF (LOGO & SLOGAN - BURASI AYNI KALDI) */}
+      {/* 2. SOL TARAF (SADECE YAZI) */}
       <div className="hidden lg:flex w-1/2 relative z-10 items-center justify-center p-12">
         <div className="max-w-lg w-full space-y-8">
-           <div className="flex items-center gap-4 animate-in slide-in-from-left duration-700">
-              <div className="bg-red-600 p-3 rounded-2xl shadow-lg shadow-red-900/50">
-                <Plane className="text-white transform -rotate-12" size={36} fill="currentColor" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-black tracking-widest uppercase text-white leading-none">THY SECURITY</h1>
-                <p className="text-[10px] text-red-500 font-mono tracking-[0.4em] uppercase mt-1">Access Control v2.0</p>
+           <div className="animate-in slide-in-from-left duration-700">
+              <h1 className="text-4xl font-black tracking-widest uppercase text-white leading-none drop-shadow-2xl">
+                THY SECURITY
+              </h1>
+              <div className="flex items-center gap-3 mt-3">
+                 <div className="h-[2px] w-12 bg-red-600"></div>
+                 <p className="text-xs text-slate-300 font-mono tracking-[0.4em] uppercase">Access Control v2.1</p>
               </div>
            </div>
            
            <div className="space-y-4 animate-in slide-in-from-bottom duration-700 delay-100">
-             <h2 className="text-5xl font-bold leading-tight text-white">
+             <h2 className="text-5xl font-bold leading-tight text-white drop-shadow-lg">
                Güvenli Erişim <br/> 
-               <span className="text-red-500">Tek Noktada.</span>
+               <span className="text-red-500 font-light italic">Tek Noktada.</span>
              </h2>
              <p className="text-slate-400 text-lg leading-relaxed font-medium">
                Ziyaretçi yönetim sistemi, saha operasyonları ve idari denetim mekanizması artık tek bir panel üzerinden yönetilmektedir.
@@ -91,18 +88,12 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* SAĞ TARAF (FORM - GÜNCELLENDİ) */}
+      {/* 3. SAĞ TARAF (FORM KARTI) */}
       <div className="w-full lg:w-1/2 relative z-10 flex items-center justify-center p-6">
-         <div className="max-w-md w-full bg-white/10 backdrop-blur-xl border border-white/20 p-8 md:p-10 rounded-[2rem] shadow-2xl animate-in slide-in-from-right duration-700">
+         <div className="max-w-md w-full bg-white/10 backdrop-blur-xl border border-white/10 p-8 md:p-10 rounded-[2rem] shadow-2xl animate-in slide-in-from-right duration-700">
             <div className="text-center mb-10">
-               {/* --- DEĞİŞİKLİK BAŞLANGICI --- */}
-               <div className="flex justify-center mb-4">
-                  {/* Kırmızı yuvarlak uçak yerine TSS Logosu */}
-                  <img src="/tss.png" alt="TSS Logo" className="h-16 w-auto object-contain drop-shadow-md" />
-               </div>
-               {/* THY PORTAL yerine TSS PORTAL */}
-               <h2 className="text-2xl font-black text-white tracking-tight">TSS PORTAL</h2>
-               {/* --- DEĞİŞİKLİK BİTİŞİ --- */}
+               {/* LOGO BURADAN SİLİNDİ */}
+               <h2 className="text-2xl font-black text-white tracking-tight">THY ZİYARET PORTALI</h2>
                <p className="text-slate-400 mt-2 text-sm font-medium">Kurumsal Giriş Ekranı</p>
             </div>
 
@@ -122,7 +113,7 @@ export default function LoginPage() {
                        type="email" 
                        value={email}
                        onChange={(e) => setEmail(e.target.value)}
-                       className="w-full pl-12 pr-4 py-3.5 bg-slate-950/50 border border-white/10 rounded-xl text-white font-bold focus:ring-2 focus:ring-red-500/50 focus:border-red-500/50 outline-none transition-all placeholder:text-slate-600"
+                       className="w-full pl-12 pr-4 py-3.5 bg-slate-950/50 border border-white/10 rounded-xl text-white font-bold focus:ring-2 focus:ring-red-600/50 focus:border-red-600/50 outline-none transition-all placeholder:text-slate-600"
                        placeholder="ad.soyad@thy.com"
                        required
                      />
@@ -137,7 +128,7 @@ export default function LoginPage() {
                        type={showPassword ? "text" : "password"}
                        value={password}
                        onChange={(e) => setPassword(e.target.value)}
-                       className="w-full pl-12 pr-12 py-3.5 bg-slate-950/50 border border-white/10 rounded-xl text-white font-bold focus:ring-2 focus:ring-red-500/50 focus:border-red-500/50 outline-none transition-all placeholder:text-slate-600"
+                       className="w-full pl-12 pr-12 py-3.5 bg-slate-950/50 border border-white/10 rounded-xl text-white font-bold focus:ring-2 focus:ring-red-600/50 focus:border-red-600/50 outline-none transition-all placeholder:text-slate-600"
                        placeholder="••••••••"
                        required
                      />

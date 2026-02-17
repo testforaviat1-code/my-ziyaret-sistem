@@ -5,20 +5,26 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation"; 
 import Link from "next/link";
 import { 
-  Phone, Utensils, Users, Smartphone, Heart, Compass, Sun, 
-  FileText, Files, Gavel, GraduationCap, Lightbulb, Award, 
-  Ticket, Target, HeartPulse, Plane, Globe, X, ScanFace, 
-  ShieldCheck, LogOut, Loader2, ChevronRight, Search, Menu, Bell, User
+  LogOut, User, Search, ShieldCheck, 
+  Files, X, Globe, ScanFace, ChevronRight,
+  Plane, Calendar, CloudSun
 } from "lucide-react";
 
 export default function Home() {
   const router = useRouter();
-  const [isModalOpen, setIsModalOpen] = useState(false);
   
-  // --- MEKANİK STATE'LER (Auth & Rol) ---
+  // MODAL VE MENÜ STATE'LERİ
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false); 
+  
+  // AUTH STATE'LERİ
   const [loading, setLoading] = useState(true);
   const [kullanici, setKullanici] = useState<any>(null);
   const [rol, setRol] = useState<string | null>(null);
+
+  // Tarih Bilgisi
+  const bugun = new Date();
+  const tarihFormat = bugun.toLocaleDateString('tr-TR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
   useEffect(() => {
     async function kontrolEt() {
@@ -49,32 +55,6 @@ export default function Home() {
     router.push("/login");
   };
 
-  // --- İKON MENÜ LİSTESİ (Koyu Gri Alan) ---
-  const iconMenu = [
-    { icon: Phone, label: "TELEFON REHBERİ" },
-    { icon: Utensils, label: "GÜNÜN YEMEĞİ" },
-    { icon: Users, label: "ÇALIŞAN PORTALI (TEMPO)" },
-    { icon: Smartphone, label: "TK STORE" },
-    { icon: Heart, label: "EMPATHY" },
-    { icon: Compass, label: "TURUNCU HAT v2.0" },
-    { icon: Sun, label: "SOSYAL HİZMETLER" },
-    { icon: FileText, label: "EBYS" },
-    { icon: Files, label: "DDMS" },
-    { icon: Gavel, label: "İKTS" },
-    { icon: GraduationCap, label: "LMS" },
-    { icon: Lightbulb, label: "IDEAPORT" },
-    { icon: Award, label: "KARİYER" },
-    { icon: Ticket, label: "MYPASS" },
-    { icon: Target, label: "2033 STRATEJİLERİMİZ" },
-    { icon: HeartPulse, label: "SAĞLIK" },
-    { icon: Globe, label: "ZED" },
-    { icon: Compass, label: "ETİK BİLDİRİM" },
-    { icon: ShieldCheck, label: "AQD PORTAL" },
-    { icon: Plane, label: "BRAND CENTER" },
-    { icon: Users, label: "QUALITEAM" },
-  ];
-
-  // --- KISAYOLLAR LİSTESİ (Beyaz Alan - Pasifler) ---
   const shortcutList = [
     "SAFETY PORTAL", "SATIŞ VERİ DEPOSU (SDS)", "SERTİFİKALAR", "SÖZLEŞME DASHBOARD",
     "SÖZLEŞMELER PORTALI", "STAR ALLIANCE", "STATION PORTAL", "TEHİR İTİRAZ SİSTEMİ",
@@ -84,170 +64,227 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-white text-slate-800 gap-4 font-sans">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white gap-4 font-sans">
         <div className="w-16 h-16 relative">
-             <div className="absolute inset-0 rounded-full border-4 border-slate-200"></div>
+             <div className="absolute inset-0 rounded-full border-4 border-slate-700"></div>
              <div className="absolute inset-0 rounded-full border-4 border-red-600 border-t-transparent animate-spin"></div>
         </div>
-        <p className="text-xs font-bold animate-pulse tracking-widest uppercase text-slate-400">Yükleniyor...</p>
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#f4f4f4] font-sans selection:bg-red-100 selection:text-red-900">
+    <main className="min-h-screen bg-slate-50 font-sans selection:bg-red-100 selection:text-red-900">
       
-      {/* 1. HEADER (Beyaz Üst Bar) */}
-      <header className="bg-white h-[80px] px-4 md:px-12 flex justify-between items-center shadow-sm sticky top-0 z-50">
-        <div className="flex items-center gap-8">
-          {/* Logo */}
-          <div className="flex items-center gap-3">
-             <img src="/thy_logo.png" alt="THY" className="h-10 w-auto object-contain" onError={(e) => {e.currentTarget.style.display='none'}} /> 
-             {/* Logo yüklenmezse yedek ikon */}
-             <div className="flex items-center gap-2" style={{display: 'none'}}> 
-                <div className="bg-red-600 rounded-full p-2 text-white"><Plane size={20} fill="currentColor"/></div>
-                <span className="font-bold text-slate-800">TURKISH AIRLINES</span>
-             </div>
-          </div>
-          
-          {/* Nav Linkleri */}
-          <nav className="hidden xl:flex gap-6 text-[13px] font-bold text-slate-500 tracking-wide h-full items-center">
-            <span className="text-slate-800 border-b-4 border-red-600 h-[80px] flex items-center px-2 cursor-pointer">ANASAYFA</span>
-            <span className="hover:text-red-600 transition-colors cursor-default h-[80px] flex items-center px-2">KURUMSAL</span>
-            <span className="hover:text-red-600 transition-colors cursor-default h-[80px] flex items-center px-2">ÇALIŞAN DESTEK</span>
-            <span className="hover:text-red-600 transition-colors cursor-default h-[80px] flex items-center px-2">İLETİŞİM</span>
-          </nav>
+      {/* MENÜ KAPATMA KATMANI */}
+      {isProfileOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-transparent cursor-default" 
+          onClick={() => setIsProfileOpen(false)}
+        ></div>
+      )}
+
+      {/* 1. HEADER */}
+      <header className="absolute top-0 left-0 right-0 z-50 h-[90px] px-6 md:px-12 flex justify-between items-center border-b border-white/10 backdrop-blur-[2px]">
+        <div className="flex items-center gap-4">
+           {/* Logo */}
+           <img 
+             src="/thy_logo.png" 
+             alt="THY" 
+             className="h-10 w-auto object-contain brightness-0 invert opacity-90" 
+             onError={(e) => {e.currentTarget.style.display='none'}} 
+           />
+           <div className="hidden md:flex flex-col text-white/80">
+              <span className="text-sm font-bold tracking-widest leading-none">TURKISH AIRLINES</span>
+           </div>
         </div>
         
         {/* Sağ Taraf: Profil */}
         <div className="flex items-center gap-6">
-           <div className="hidden md:flex flex-col items-end">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">TÜRK HAVA YOLLARI'NDA BUGÜN</span>
-              <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
-                 <Plane size={16} className="text-slate-400" /> 428 <span className="text-xs font-normal text-slate-500">HAVADAKİ UÇAK</span>
-              </div>
+           <div className="hidden md:flex flex-col items-end text-white">
+              <span className="text-[10px] opacity-60 font-bold uppercase tracking-widest">AKTİF KULLANICI</span>
+              <div className="font-bold text-sm">{kullanici?.tam_ad}</div>
            </div>
-           <div className="h-8 w-[1px] bg-slate-200 hidden md:block"></div>
-           <div className="flex items-center gap-3 cursor-pointer group relative">
-               <div className="text-right hidden sm:block">
-                  <div className="text-sm font-bold text-slate-800 uppercase group-hover:text-red-600 transition-colors">{kullanici?.tam_ad}</div>
-                  <div className="text-[10px] text-slate-400 font-bold uppercase">{rol === 'admin' ? 'YÖNETİCİ' : rol === 'guvenlik' ? 'GÜVENLİK' : 'PERSONEL'}</div>
-               </div>
-               <div className="bg-slate-100 p-2 rounded-full text-slate-600 group-hover:bg-red-50 group-hover:text-red-600 transition-colors">
+           <div className="h-8 w-[1px] bg-white/20 hidden md:block"></div>
+           
+           <div className="relative z-50">
+               <button 
+                 onClick={() => setIsProfileOpen(!isProfileOpen)} 
+                 className={`p-2.5 rounded-full text-white transition-all backdrop-blur-md border border-white/10 ${isProfileOpen ? 'bg-red-600 border-red-500 ring-4 ring-red-900/30' : 'bg-white/10 hover:bg-white/20'}`}
+               >
                   <User size={20} />
-               </div>
-               
-               {/* Dropdown Çıkış */}
-               <div className="absolute top-full right-0 mt-2 w-32 bg-white shadow-xl rounded-lg border border-slate-100 overflow-hidden hidden group-hover:block animate-in fade-in slide-in-from-top-2">
-                  <button onClick={cikisYap} className="w-full text-left px-4 py-3 text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2">
-                     <LogOut size={14}/> ÇIKIŞ YAP
-                  </button>
-               </div>
+               </button>
+
+               {isProfileOpen && (
+                 <div className="absolute top-full right-0 mt-3 w-56 bg-white shadow-2xl rounded-xl overflow-hidden animate-in fade-in slide-in-from-top-2 border border-slate-100">
+                    <div className="bg-slate-50 px-4 py-3 border-b border-slate-100">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Kullanıcı Rolü</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className={`w-2 h-2 rounded-full ${rol === 'admin' ? 'bg-red-500' : 'bg-emerald-500'}`}></div>
+                        <p className="text-sm font-black text-slate-800 uppercase">{rol}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="p-2">
+                      <button onClick={cikisYap} className="w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors">
+                         <LogOut size={16}/> GÜVENLİ ÇIKIŞ
+                      </button>
+                    </div>
+                 </div>
+               )}
            </div>
         </div>
       </header>
 
-      {/* 2. HERO BANNER (Gök Görseli) */}
-      <div className="relative w-full h-[350px] bg-slate-800 overflow-hidden group">
-         <img src="/thy_gok.jpg" alt="Banner" className="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-[3s]" />
-         <div className="absolute inset-0 bg-gradient-to-t from-[#2b303b] to-transparent"></div>
-         <div className="absolute bottom-10 left-4 md:left-12 text-white max-w-2xl">
-            <div className="bg-red-600 w-fit px-3 py-1 text-[10px] font-bold uppercase tracking-widest mb-2">Duyuru</div>
-            <h1 className="text-4xl font-light tracking-tight mb-2">ÖZEL SAĞLIK SİGORTAMIZ <br/> <span className="font-bold">YENİLENDİ</span></h1>
-            <p className="text-sm text-slate-300 opacity-90">01.01.2026 tarihinden itibaren geçerli olan yeni poliçe detaylarına buradan ulaşabilirsiniz.</p>
-         </div>
-      </div>
+      {/* 2. HERO SECTION */}
+      <div className="relative w-full h-[75vh] bg-slate-900 overflow-hidden">
+         <img 
+            src="/thy_gok.jpg" 
+            alt="Hero" 
+            className="absolute inset-0 w-full h-full object-cover opacity-60 scale-105 animate-[pulse_20s_ease-in-out_infinite]" 
+         />
+         <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900/80 to-transparent"></div>
+         <div className="absolute inset-0 bg-gradient-to-t from-slate-50/80 via-transparent to-transparent"></div>
 
-      {/* 3. KOYU GRID MENÜ (Pasif İkonlar) */}
-      <div className="bg-[#2b303b] text-white py-12 px-4 md:px-12">
-         <div className="max-w-[1600px] mx-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-px bg-white/10 border border-white/10">
-            {iconMenu.map((item, idx) => (
-               <div key={idx} className="aspect-square bg-[#2b303b] hover:bg-[#353b48] transition-colors flex flex-col items-center justify-center gap-4 cursor-default group border border-white/5 p-4 text-center">
-                  <item.icon size={32} className="text-slate-400 group-hover:text-white transition-colors" strokeWidth={1.5} />
-                  <span className="text-[10px] font-bold text-slate-400 group-hover:text-white uppercase tracking-wider leading-tight px-2">{item.label}</span>
+         {/* pt-32 ile içeriği aşağı ittik */}
+         <div className="relative z-10 h-full max-w-[1600px] mx-auto px-6 md:px-12 flex flex-col justify-center pt-32 pb-20">
+            
+            <div className="max-w-3xl space-y-6 animate-in slide-in-from-left duration-1000">
+               <div className="flex items-center gap-3 text-red-400 font-bold tracking-widest uppercase text-xs">
+                  <span className="w-8 h-[2px] bg-red-500"></span>
+                  Operasyon Yönetim Merkezi
                </div>
-            ))}
-         </div>
-      </div>
+               
+               <h1 className="text-5xl md:text-7xl font-black text-white leading-tight drop-shadow-lg">
+                  DÜNYANIN EN ÇOK <br/>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-300">ÜLKESİNE UÇUYORUZ.</span>
+               </h1>
+               
+               <p className="text-lg text-slate-300 font-medium max-w-xl leading-relaxed">
+                  Küresel ağımızdaki operasyonel süreçleri tek bir noktadan yönetin, takip edin ve güvenliği sağlayın.
+               </p>
 
-      {/* 4. KISAYOLLAR LİSTESİ (Beyaz Alan) */}
-      <div className="bg-white py-12 px-4 md:px-12 border-t border-slate-200">
-         <div className="max-w-[1600px] mx-auto">
-            {/* Başlık */}
-            <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
-               <h2 className="text-lg font-bold text-slate-800 uppercase tracking-wide">KISAYOLLAR</h2>
-               <Search className="text-slate-400" size={20} />
-            </div>
-
-            {/* Liste */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-0">
-               {/* Pasif Linkler */}
-               {shortcutList.map((text, idx) => (
-                  <div key={idx} className="flex items-center gap-3 py-4 border-b border-slate-100 text-xs font-bold text-slate-500 hover:text-slate-800 hover:pl-2 transition-all cursor-default">
-                     <span className="text-red-600 font-black text-sm">&gt;</span>
-                     {text}
+               <div className="flex gap-6 pt-4">
+                  <div className="flex items-center gap-3 text-white/90 bg-white/10 px-4 py-2 rounded-lg border border-white/10 backdrop-blur-md shadow-lg">
+                     <Calendar size={18} className="text-red-400"/>
+                     <span className="text-xs font-bold uppercase">{tarihFormat}</span>
                   </div>
-               ))}
+                  <div className="flex items-center gap-3 text-white/90 bg-white/10 px-4 py-2 rounded-lg border border-white/10 backdrop-blur-md shadow-lg">
+                     <CloudSun size={18} className="text-yellow-400"/>
+                     <span className="text-xs font-bold uppercase">İSTANBUL 18°C</span>
+                  </div>
+               </div>
+            </div>
 
-               {/* --- AKTİF BUTON (SAĞ ALTTAKİ BOŞLUK İÇİN) --- */}
-               <button 
-                  onClick={() => setIsModalOpen(true)}
-                  className="flex items-center gap-3 py-4 border-b border-red-100 bg-red-50 text-xs font-black text-red-700 hover:bg-red-600 hover:text-white hover:pl-4 transition-all cursor-pointer group shadow-sm animate-in slide-in-from-bottom-2 mt-4 md:mt-0"
-               >
-                   <span className="text-red-600 font-black text-sm group-hover:text-white transition-colors">&gt;</span>
-                   ZİYARETÇİ VE GÜVENLİK İŞLEMLERİ
-                   <span className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity"><ScanFace size={16}/></span>
-               </button>
+         </div>
+      </div>
+
+      {/* 3. KISAYOLLAR & ANA AKSİYON ALANI */}
+      <div className="relative z-20 -mt-24 px-6 md:px-12 pb-12">
+         <div className="max-w-[1600px] mx-auto">
+            
+            <div className="flex flex-col lg:flex-row gap-6 items-stretch">
+               
+               {/* SOL: ÖZEL AKSİYON KARTI */}
+               <div className="w-full lg:w-1/3 animate-in slide-in-from-bottom duration-1000 delay-200">
+                  <div className="h-full bg-white rounded-2xl shadow-2xl shadow-slate-900/10 p-8 border-t-8 border-red-600 relative overflow-hidden group flex flex-col justify-between min-h-[320px]">
+                     
+                     <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <Globe size={140} />
+                     </div>
+                     
+                     <div>
+                       <h3 className="text-3xl font-black text-slate-800 mb-3 tracking-tight">ZİYARETÇİ PORTALI</h3>
+                       <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                         Güvenlik, ziyaretçi kaydı ve saha giriş çıkış işlemleri için yetkili yönetim paneli.
+                       </p>
+                     </div>
+                     
+                     <div className="mt-8">
+                       {/* BURASI GÜNCELLENDİ: hover:bg-emerald-600 */}
+                       <button 
+                          onClick={() => setIsModalOpen(true)}
+                          className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold flex items-center justify-between px-6 hover:bg-emerald-600 transition-colors group/btn shadow-lg"
+                       >
+                          İŞLEM YAP
+                          <div className="bg-white/20 p-1.5 rounded-full group-hover/btn:translate-x-2 transition-transform">
+                             <ChevronRight size={20} />
+                          </div>
+                       </button>
+                     </div>
+
+                  </div>
+               </div>
+
+               {/* SAĞ: KISAYOL LİSTESİ */}
+               <div className="w-full lg:w-2/3 bg-white rounded-2xl shadow-2xl shadow-slate-900/10 border-t-8 border-slate-200 p-8 animate-in slide-in-from-bottom duration-1000 delay-300 flex flex-col">
+                  <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+                     <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest">KURUMSAL KISAYOLLAR</h2>
+                     <Search size={18} className="text-slate-300"/>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
+                     {shortcutList.map((text, idx) => (
+                        <a key={idx} href="#" className="flex items-center gap-3 group cursor-pointer p-2 rounded-lg hover:bg-slate-50 transition-colors">
+                           <div className="w-1.5 h-1.5 rounded-full bg-slate-300 group-hover:bg-red-500 transition-colors"></div>
+                           <span className="text-[11px] font-bold text-slate-500 group-hover:text-slate-900 transition-colors truncate">
+                              {text}
+                           </span>
+                        </a>
+                     ))}
+                  </div>
+               </div>
+
             </div>
          </div>
       </div>
 
-      {/* 5. FOOTER */}
-      <footer className="bg-[#f4f4f4] py-8 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-         © 2026 TÜRK HAVA YOLLARI A.O. | BİLGİ TEKNOLOJİLERİ
+      {/* FOOTER */}
+      <footer className="text-center pb-8 pt-4 text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">
+         © 2026 TURKISH AIRLINES TECHNOLOGY
       </footer>
 
-      {/* 6. MODAL (Sistemin Açıldığı Yer) */}
+      {/* MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-lg rounded-xl overflow-hidden shadow-2xl relative">
-            <div className="bg-[#232b38] p-5 flex justify-between items-center border-b border-slate-700">
+          <div className="bg-white w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl relative">
+            <div className="bg-slate-900 p-6 flex justify-between items-center">
               <div className="flex items-center gap-3">
-                <Globe className="text-red-600" size={24} />
-                <h3 className="text-white font-bold text-lg tracking-wide">ZİYARETÇİ İŞLEM MERKEZİ</h3>
+                <ShieldCheck className="text-red-500" size={28} />
+                <div>
+                   <h3 className="text-white font-bold text-lg leading-none">GÜVENLİK MERKEZİ</h3>
+                   <p className="text-[10px] text-slate-400 uppercase tracking-wider mt-1">Erişim Yönetim Paneli</p>
+                </div>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white transition-colors bg-slate-700/50 p-2 rounded-full">
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white transition-colors bg-white/5 p-2 rounded-full hover:bg-white/10">
                 <X size={20} />
               </button>
             </div>
             
-            <div className="p-8 bg-slate-50 grid gap-4">
+            <div className="p-6 bg-slate-50 grid gap-4">
               
-              {/* Ziyaretçi Formu - Herkes */}
-              <Link href="/ziyaretci-formu" className="flex items-center gap-4 p-4 bg-white border-l-4 border-blue-600 shadow-sm hover:shadow-md hover:translate-x-1 transition-all rounded-r-lg group">
-                <div className="bg-blue-50 p-3 rounded-lg text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors"><Users size={24} /></div>
-                <div><h4 className="font-bold text-slate-800">Talep Oluştur</h4><p className="text-xs text-slate-500 mt-1">Dışarıdan gelecek misafir kaydı</p></div>
+              <Link href="/ziyaretci-formu" className="flex items-center gap-4 p-5 bg-white border border-slate-200 shadow-sm hover:shadow-lg hover:border-blue-500 hover:-translate-y-1 transition-all rounded-xl group">
+                <div className="bg-blue-50 p-3 rounded-full text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors"><ScanFace size={24} /></div>
+                <div><h4 className="font-bold text-slate-800 text-sm">Ziyaretçi Talebi Oluştur</h4><p className="text-xs text-slate-500 mt-1">Yeni misafir kaydı</p></div>
+                <ChevronRight className="ml-auto text-slate-300 group-hover:text-blue-600" size={20}/>
               </Link>
 
-              {/* Güvenlik Paneli - Yetkililer */}
               {(rol === 'guvenlik' || rol === 'admin') && (
-                <Link href="/guvenlik-panel" className="flex items-center gap-4 p-4 bg-white border-l-4 border-emerald-600 shadow-sm hover:shadow-md hover:translate-x-1 transition-all rounded-r-lg group">
-                    <div className="bg-emerald-50 p-3 rounded-lg text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors"><ShieldCheck size={24} /></div>
-                    <div><h4 className="font-bold text-slate-800">Güvenlik Paneli</h4><p className="text-xs text-slate-500 mt-1">Saha giriş/çıkış kontrolü</p></div>
+                <Link href="/guvenlik-panel" className="flex items-center gap-4 p-5 bg-white border border-slate-200 shadow-sm hover:shadow-lg hover:border-emerald-500 hover:-translate-y-1 transition-all rounded-xl group">
+                    <div className="bg-emerald-50 p-3 rounded-full text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors"><ShieldCheck size={24} /></div>
+                    <div><h4 className="font-bold text-slate-800 text-sm">Güvenlik Personel Ekranı</h4><p className="text-xs text-slate-500 mt-1">Giriş/Çıkış kontrolleri</p></div>
+                    <ChevronRight className="ml-auto text-slate-300 group-hover:text-emerald-600" size={20}/>
                 </Link>
               )}
               
-              {/* İdari Panel - Admin */}
               {rol === 'admin' && (
-                <Link href="/idari-panel" className="flex items-center gap-4 p-4 bg-white border-l-4 border-slate-800 shadow-sm hover:shadow-md hover:translate-x-1 transition-all rounded-r-lg group">
-                    <div className="bg-slate-100 p-3 rounded-lg text-slate-700 group-hover:bg-slate-800 group-hover:text-white transition-colors"><Files size={24} /></div>
-                    <div><h4 className="font-bold text-slate-800">İdari Yönetim Paneli</h4><p className="text-xs text-slate-500 mt-1">Tüm sistem raporları ve ayarlar</p></div>
+                <Link href="/idari-panel" className="flex items-center gap-4 p-5 bg-white border border-slate-200 shadow-sm hover:shadow-lg hover:border-slate-800 hover:-translate-y-1 transition-all rounded-xl group">
+                    <div className="bg-slate-100 p-3 rounded-full text-slate-700 group-hover:bg-slate-800 group-hover:text-white transition-colors"><Files size={24} /></div>
+                    <div><h4 className="font-bold text-slate-800 text-sm">İdari Yönetim Paneli</h4><p className="text-xs text-slate-500 mt-1">Raporlar ve ayarlar</p></div>
+                    <ChevronRight className="ml-auto text-slate-300 group-hover:text-slate-800" size={20}/>
                 </Link>
               )}
 
-            </div>
-            <div className="bg-slate-100 p-4 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest border-t border-slate-200">
-              Güvenli Erişim Protokolü v2.5
             </div>
           </div>
         </div>
