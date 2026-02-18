@@ -3,14 +3,15 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { 
-  Lock, Mail, ArrowRight, Eye, EyeOff, 
-  AlertCircle 
+  Lock, ArrowRight, Eye, EyeOff, 
+  AlertCircle, Hash, CreditCard 
 } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
   
-  const [email, setEmail] = useState("");
+  // Artık email değil, sicilNo tutuyoruz
+  const [sicilNo, setSicilNo] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,13 +22,23 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
+    // Sicil No kontrolü (9 hane mi?)
+    if (sicilNo.length < 4) { // Test için kısa bıraktım, normalde !== 9 yapabilirsin
+       setError("Lütfen geçerli bir Sicil No giriniz.");
+       setLoading(false);
+       return;
+    }
+
     try {
+      // HİLE BURADA: Kullanıcının girdiği numarayı mail formatına çeviriyoruz
+      const emailToSubmit = `${sicilNo}@thy.com`;
+
       const { data: { user }, error: authError } = await supabase.auth.signInWithPassword({
-        email,
+        email: emailToSubmit, // Arka planda mail gönderiyoruz
         password,
       });
 
-      if (authError || !user) throw new Error("E-posta adresiniz veya şifreniz hatalı.");
+      if (authError || !user) throw new Error("Sicil No veya şifre hatalı.");
 
       const { data: profil, error: profilError } = await supabase
         .from('profiller')
@@ -106,15 +117,20 @@ export default function LoginPage() {
 
             <form onSubmit={handleLogin} className="space-y-6">
                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-400 uppercase ml-1">Kurumsal E-Posta</label>
+                  <label className="text-xs font-bold text-slate-400 uppercase ml-1">Personel Sicil No</label>
                   <div className="relative group">
-                     <Mail className="absolute left-4 top-4 text-slate-500 group-focus-within:text-white transition-colors" size={20} />
+                     {/* İkonu Mail yerine ID Kartı veya Hash yaptık */}
+                     <CreditCard className="absolute left-4 top-4 text-slate-500 group-focus-within:text-white transition-colors" size={20} />
                      <input 
-                       type="email" 
-                       value={email}
-                       onChange={(e) => setEmail(e.target.value)}
-                       className="w-full pl-12 pr-4 py-3.5 bg-slate-950/50 border border-white/10 rounded-xl text-white font-bold focus:ring-2 focus:ring-red-600/50 focus:border-red-600/50 outline-none transition-all placeholder:text-slate-600"
-                       placeholder="ad.soyad@thy.com"
+                       type="text" 
+                       value={sicilNo}
+                       // Sadece rakam girilmesini sağla
+                       onChange={(e) => {
+                           if (/^\d*$/.test(e.target.value)) setSicilNo(e.target.value);
+                       }}
+                       maxLength={9} // 9 Hane sınırı
+                       className="w-full pl-12 pr-4 py-3.5 bg-slate-950/50 border border-white/10 rounded-xl text-white font-bold focus:ring-2 focus:ring-red-600/50 focus:border-red-600/50 outline-none transition-all placeholder:text-slate-600 tracking-widest font-mono"
+                       placeholder="123456789"
                        required
                      />
                   </div>
