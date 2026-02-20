@@ -64,14 +64,16 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen relative flex font-sans overflow-hidden bg-slate-900">
       
-      {/* 1. ARKAPLAN (UÇAK TEMASI) */}
+      {/* 1. ARKAPLAN (YENİ UÇAK TEMASI) */}
       <div className="absolute inset-0 z-0">
          <img 
-           src="/thy_gok.jpg" 
+           src="/g3.jpeg" 
            alt="THY Background" 
-           className="w-full h-full object-cover opacity-60" 
+           // object-bottom ile uçağı hizaladık, kırmızının parlaması için opacity kaldırıldı
+           className="w-full h-full object-cover object-bottom" 
          />
-         <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900/80 to-slate-900/60"></div>
+         {/* Kırmızıyı boğmadan sadece yazıların arkasını koyulaştıran hafif geçiş */}
+         <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-transparent to-slate-900/70"></div>
       </div>
 
       {/* 2. SOL TARAF (SADECE YAZI) */}
@@ -79,7 +81,7 @@ export default function LoginPage() {
         <div className="max-w-lg w-full space-y-8">
            <div className="animate-in slide-in-from-left duration-700">
               <h1 className="text-4xl font-black tracking-widest uppercase text-white leading-none drop-shadow-2xl">
-                THY SECURITY
+                 THY SECURITY
               </h1>
               <div className="flex items-center gap-3 mt-3">
                  <div className="h-[2px] w-12 bg-red-600"></div>
@@ -92,7 +94,7 @@ export default function LoginPage() {
                Güvenli Erişim <br/> 
                <span className="text-red-500 font-light italic">Tek Noktada.</span>
              </h2>
-             <p className="text-slate-400 text-lg leading-relaxed font-medium">
+             <p className="text-slate-200 text-lg leading-relaxed font-medium drop-shadow-md">
                Ziyaretçi yönetim sistemi, saha operasyonları ve idari denetim mekanizması artık tek bir panel üzerinden yönetilmektedir.
              </p>
            </div>
@@ -101,11 +103,11 @@ export default function LoginPage() {
 
       {/* 3. SAĞ TARAF (FORM KARTI) */}
       <div className="w-full lg:w-1/2 relative z-10 flex items-center justify-center p-6">
-         <div className="max-w-md w-full bg-white/10 backdrop-blur-xl border border-white/10 p-8 md:p-10 rounded-[2rem] shadow-2xl animate-in slide-in-from-right duration-700">
+         <div className="max-w-md w-full bg-white/10 backdrop-blur-xl border border-white/20 p-8 md:p-10 rounded-[2rem] shadow-2xl animate-in slide-in-from-right duration-700">
             <div className="text-center mb-10">
                {/* LOGO BURADAN SİLİNDİ */}
-               <h2 className="text-2xl font-black text-white tracking-tight">THY ZİYARET PORTALI</h2>
-               <p className="text-slate-400 mt-2 text-sm font-medium">Kurumsal Giriş Ekranı</p>
+               <h2 className="text-2xl font-black text-white tracking-tight drop-shadow-md">THY ZİYARET PORTALI</h2>
+               <p className="text-slate-200 mt-2 text-sm font-medium">Kurumsal Giriş Ekranı</p>
             </div>
 
             {error && (
@@ -117,7 +119,7 @@ export default function LoginPage() {
 
             <form onSubmit={handleLogin} className="space-y-6">
                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-400 uppercase ml-1">Personel Sicil No</label>
+                  <label className="text-xs font-bold text-slate-300 uppercase ml-1">Personel Sicil No</label>
                   <div className="relative group">
                      {/* İkonu Mail yerine ID Kartı veya Hash yaptık */}
                      <CreditCard className="absolute left-4 top-4 text-slate-500 group-focus-within:text-white transition-colors" size={20} />
@@ -129,7 +131,7 @@ export default function LoginPage() {
                            if (/^\d*$/.test(e.target.value)) setSicilNo(e.target.value);
                        }}
                        maxLength={9} // 9 Hane sınırı
-                       className="w-full pl-12 pr-4 py-3.5 bg-slate-950/50 border border-white/10 rounded-xl text-white font-bold focus:ring-2 focus:ring-red-600/50 focus:border-red-600/50 outline-none transition-all placeholder:text-slate-600 tracking-widest font-mono"
+                       className="w-full pl-12 pr-4 py-3.5 bg-slate-950/50 border border-white/10 rounded-xl text-white font-bold focus:ring-2 focus:ring-red-600/50 focus:border-red-600/50 outline-none transition-all placeholder:text-slate-500 tracking-widest font-mono"
                        placeholder="123456789"
                        required
                      />
@@ -137,14 +139,14 @@ export default function LoginPage() {
                </div>
 
                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-400 uppercase ml-1">Şifre</label>
+                  <label className="text-xs font-bold text-slate-300 uppercase ml-1">Şifre</label>
                   <div className="relative group">
                      <Lock className="absolute left-4 top-4 text-slate-500 group-focus-within:text-white transition-colors" size={20} />
                      <input 
                        type={showPassword ? "text" : "password"}
                        value={password}
                        onChange={(e) => setPassword(e.target.value)}
-                       className="w-full pl-12 pr-12 py-3.5 bg-slate-950/50 border border-white/10 rounded-xl text-white font-bold focus:ring-2 focus:ring-red-600/50 focus:border-red-600/50 outline-none transition-all placeholder:text-slate-600"
+                       className="w-full pl-12 pr-12 py-3.5 bg-slate-950/50 border border-white/10 rounded-xl text-white font-bold focus:ring-2 focus:ring-red-600/50 focus:border-red-600/50 outline-none transition-all placeholder:text-slate-500"
                        placeholder="••••••••"
                        required
                      />
@@ -161,7 +163,7 @@ export default function LoginPage() {
                <button 
                  type="submit" 
                  disabled={loading}
-                 className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white py-4 rounded-xl font-black text-lg shadow-lg shadow-red-900/50 transform active:scale-95 transition-all flex items-center justify-center gap-2 group border border-red-500/50 mt-6 disabled:opacity-70 disabled:cursor-not-allowed"
+                 className="w-full bg-gradient-to-r from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white py-4 rounded-xl font-black text-lg shadow-lg shadow-red-900/50 transform active:scale-95 transition-all flex items-center justify-center gap-2 group border border-red-500/50 mt-6 disabled:opacity-70 disabled:cursor-not-allowed"
                >
                  {loading ? (
                    <span className="flex items-center gap-2">
@@ -176,10 +178,10 @@ export default function LoginPage() {
                </button>
             </form>
 
-            <div className="mt-10 pt-6 border-t border-white/5 text-center">
-               <p className="text-xs text-slate-500 font-medium leading-relaxed">
+            <div className="mt-10 pt-6 border-t border-white/10 text-center">
+               <p className="text-xs text-slate-400 font-medium leading-relaxed">
                  © 2026 THY Teknik A.Ş. <br/> 
-                 <span className="opacity-50">Güvenlik Direktörlüğü & Bilgi Teknolojileri</span>
+                 <span className="opacity-70">Güvenlik Direktörlüğü & Bilgi Teknolojileri</span>
                </p>
             </div>
          </div>

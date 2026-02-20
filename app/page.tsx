@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase"; 
+import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation"; 
 import Link from "next/link";
 import { 
@@ -12,11 +12,11 @@ import {
 
 export default function Home() {
   const router = useRouter();
-  
+
   // MODAL VE MENÜ STATE'LERİ
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isProfileOpen, setIsProfileOpen] = useState(false); 
-  
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+
   // AUTH STATE'LERİ
   const [loading, setLoading] = useState(true);
   const [kullanici, setKullanici] = useState<any>(null);
@@ -137,41 +137,40 @@ export default function Home() {
       </header>
 
       {/* 2. HERO SECTION */}
-      <div className="relative w-full h-[75vh] bg-slate-900 overflow-hidden">
+      <div className="relative w-full h-[75vh] bg-red-900 overflow-hidden">
          <img 
-            src="/thy_gok.jpg" 
+            src="/g1.jpeg" 
             alt="Hero" 
-            className="absolute inset-0 w-full h-full object-cover opacity-60 scale-105 animate-[pulse_20s_ease-in-out_infinite]" 
+            className="absolute inset-0 w-full h-full object-cover object-bottom scale-105 animate-[pulse_20s_ease-in-out_infinite]" 
          />
-         <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900/80 to-transparent"></div>
-         <div className="absolute inset-0 bg-gradient-to-t from-slate-50/80 via-transparent to-transparent"></div>
+         
+         {/* PUS EFEKTİ YARATAN BÜTÜN GRADIENTLER SİLİNDİ */}
 
-         {/* pt-32 ile içeriği aşağı ittik */}
          <div className="relative z-10 h-full max-w-[1600px] mx-auto px-6 md:px-12 flex flex-col justify-center pt-32 pb-20">
             
             <div className="max-w-3xl space-y-6 animate-in slide-in-from-left duration-1000">
                <div className="flex items-center gap-3 text-red-400 font-bold tracking-widest uppercase text-xs">
-                  <span className="w-8 h-[2px] bg-red-500"></span>
-                  Operasyon Yönetim Merkezi
+                  <span className="w-8 h-[2px] bg-red-500 shadow-sm"></span>
+                  <span className="drop-shadow-md">Operasyon Yönetim Merkezi</span>
                </div>
                
                <h1 className="text-5xl md:text-7xl font-black text-white leading-tight drop-shadow-lg">
                   DÜNYANIN EN ÇOK <br/>
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-300">ÜLKESİNE UÇUYORUZ.</span>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-200 drop-shadow-md">ÜLKESİNE UÇUYORUZ.</span>
                </h1>
                
-               <p className="text-lg text-slate-300 font-medium max-w-xl leading-relaxed">
+               <p className="text-lg text-white font-medium max-w-xl leading-relaxed drop-shadow-md">
                   Küresel ağımızdaki operasyonel süreçleri tek bir noktadan yönetin, takip edin ve güvenliği sağlayın.
                </p>
 
                <div className="flex gap-6 pt-4">
-                  <div className="flex items-center gap-3 text-white/90 bg-white/10 px-4 py-2 rounded-lg border border-white/10 backdrop-blur-md shadow-lg">
+                  <div className="flex items-center gap-3 text-white/90 bg-white/10 px-4 py-2 rounded-lg border border-white/20 backdrop-blur-md shadow-lg">
                      <Calendar size={18} className="text-red-400"/>
-                     <span className="text-xs font-bold uppercase">{tarihFormat}</span>
+                     <span className="text-xs font-bold uppercase drop-shadow-sm">{tarihFormat}</span>
                   </div>
-                  <div className="flex items-center gap-3 text-white/90 bg-white/10 px-4 py-2 rounded-lg border border-white/10 backdrop-blur-md shadow-lg">
+                  <div className="flex items-center gap-3 text-white/90 bg-white/10 px-4 py-2 rounded-lg border border-white/20 backdrop-blur-md shadow-lg">
                      <CloudSun size={18} className="text-yellow-400"/>
-                     <span className="text-xs font-bold uppercase">İSTANBUL 18°C</span>
+                     <span className="text-xs font-bold uppercase drop-shadow-sm">İSTANBUL 18°C</span>
                   </div>
                </div>
             </div>
@@ -201,7 +200,6 @@ export default function Home() {
                      </div>
                      
                      <div className="mt-8">
-                       {/* BURASI GÜNCELLENDİ: hover:bg-emerald-600 */}
                        <button 
                           onClick={() => setIsModalOpen(true)}
                           className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold flex items-center justify-between px-6 hover:bg-emerald-600 transition-colors group/btn shadow-lg"
@@ -282,7 +280,7 @@ export default function Home() {
                     <div className="bg-slate-100 p-3 rounded-full text-slate-700 group-hover:bg-slate-800 group-hover:text-white transition-colors"><Files size={24} /></div>
                     <div><h4 className="font-bold text-slate-800 text-sm">İdari Yönetim Paneli</h4><p className="text-xs text-slate-500 mt-1">Raporlar ve ayarlar</p></div>
                     <ChevronRight className="ml-auto text-slate-300 group-hover:text-slate-800" size={20}/>
-                </Link>
+                 </Link>
               )}
 
             </div>
