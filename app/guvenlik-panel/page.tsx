@@ -1,14 +1,17 @@
 "use client";
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { sistemeLogYaz } from '@/lib/supabase/audit';
 import { 
+  
   LogOut, ShieldAlert, RefreshCw, X, 
   Phone, User, Calendar, Clock, MapPin, FileText, Truck, Briefcase, Filter, UserCheck, Activity, Users, Car, Home, Building2, ChevronRight, ArrowUpDown
 } from "lucide-react";
 import Link from "next/link";
 
 export default function GuvenlikPanel() {
+  const supabase = createClient();
   const router = useRouter();
   
   // --- STATE'LER ---
@@ -17,7 +20,14 @@ export default function GuvenlikPanel() {
   const [yukleniyor, setYukleniyor] = useState(true);
   const [secilenZiyaretci, setSecilenZiyaretci] = useState<any>(null);
 
-  // YENİ: SIRALAMA STATE'İ (Varsayılan: Eskiden Yeniye - Operasyonel Mantık)
+  // REDDETME MODALI İÇİN STATE'LER
+  const [showRedModal, setShowRedModal] = useState(false);
+  const [redNedeni, setRedNedeni] = useState("");
+
+  // YENİ: ÇOKLU SEÇİM (TOPLU ÇIKIŞ) STATE'İ
+  const [seciliZiyaretciler, setSeciliZiyaretciler] = useState<number[]>([]);
+
+  // SIRALAMA STATE'İ
   const [siralama, setSiralama] = useState<string>("eskiden-yeniye");
 
   // Personel & Kampüs Bilgisi
@@ -38,12 +48,12 @@ export default function GuvenlikPanel() {
   const [mounted, setMounted] = useState(false);
   const [zaman, setZaman] = useState<Date | null>(null);
 
-  // İstatistikler
+  // İstatistikler 
   const istatistikler = {
     toplam: ziyaretciler.length,
     iceride: ziyaretciler.filter(k => k.durum === 'iceride').length,
     bekleyen: ziyaretciler.filter(k => k.durum === 'onaylandi').length,
-    cikan: ziyaretciler.filter(k => k.durum === 'cikis_yapti').length
+    cikan: ziyaretciler.filter(k => k.durum === 'cikis_yapti' || k.durum === 'reddedildi').length
   };
 
   const bugunTarihi = new Date().toISOString().split('T')[0];
@@ -70,7 +80,7 @@ export default function GuvenlikPanel() {
 
       const { data: profil, error } = await supabase
         .from('profiller')
-        .select('rol, kampus_id, tam_ad, kampusler(isim)')
+        .select('id, rol, kampus_id, tam_ad, kampusler(isim)')
         .eq('id', user.id)
         .single();
 
@@ -81,6 +91,7 @@ export default function GuvenlikPanel() {
         if (profil.rol === 'admin') {
             setIsAdmin(true);
             setPersonelAdi(profil.tam_ad + " (Yönetici)");
+         
             const { data: kampusData } = await supabase.from('kampusler').select('*');
             if (kampusData) setTumKampusler(kampusData);
             setYukleniyor(false); 
@@ -104,7 +115,8 @@ export default function GuvenlikPanel() {
     if (!hedefKampusId) return; 
 
     setYukleniyor(true);
-    
+    setSeciliZiyaretciler([]); // Filtre değişince seçimleri sıfırla
+
     let query = supabase
       .from("talepler")
       .select("*, kampusler(isim)") 
@@ -137,12 +149,51 @@ export default function GuvenlikPanel() {
   };
 
   // --- İŞLEMLER ---
-  const durumGuncelle = async (id: number, yeniDurum: string, e?: any) => {
+  const durumGuncelle = async (id: number, yeniDurum: string, n: string = "", e?: any) => {
     if(e) e.stopPropagation();
-    const { error } = await supabase.from("talepler").update({ durum: yeniDurum }).eq("id", id);
+    
+    const payload: any = { 
+      durum: yeniDurum,
+      islem_yapan_guvenlik: personelAdi 
+    };
+    if (yeniDurum === 'reddedildi') payload.red_nedeni = n;
+
+    const { error } = await supabase.from("talepler").update(payload).eq("id", id);
+    
     if (!error) {
-      setZiyaretciler((liste) => liste.map((k) => k.id === id ? { ...k, durum: yeniDurum } : k));
-      if (secilenZiyaretci?.id === id) setSecilenZiyaretci({ ...secilenZiyaretci, durum: yeniDurum });
+      // 1. Kendi ekranındaki listeyi güncelleyen mevcut kodun (Burası sende zaten var)
+      setZiyaretciler((liste) => liste.map((k) => k.id === id ? { ...k, durum: yeniDurum, red_nedeni: n, islem_yapan_guvenlik: personelAdi } : k));
+
+      // 2. İŞTE KARAKUTU BURADA DEVREYE GİRİYOR! (Bunu yeni ekliyoruz)
+      sistemeLogYaz(
+        yeniDurum,            // İşlem türü (örn: 'iceride', 'cikti')
+        'talepler',           // Tablo adı
+        String(id),           // Ziyaretçi Talep ID'si
+        { bilgi: "eski durum" }, // Eski değer 
+        payload,              // Yeni değer
+        `Güvenlik, ${id} numaralı talebin durumunu '${yeniDurum}' yaptı.` // IT Müdürünün okuyacağı açıklama
+      );
+    }
+  };
+
+  // YENİ: SEÇİLENLERİ TOPLU ÇIKIŞ YAP
+  const topluCikisYap = async () => {
+    if (seciliZiyaretciler.length === 0) return;
+    const onayi = window.confirm(`${seciliZiyaretciler.length} ziyaretçinin çıkış işlemini onaylıyor musunuz?`);
+    if (!onayi) return;
+
+    const payload = { 
+      durum: 'cikis_yapti', 
+      islem_yapan_guvenlik: personelAdi 
+    };
+
+    const { error } = await supabase.from('talepler').update(payload).in('id', seciliZiyaretciler);
+
+    if (!error) {
+      setZiyaretciler((liste) => liste.map((k) => seciliZiyaretciler.includes(k.id) ? { ...k, ...payload } : k));
+      setSeciliZiyaretciler([]); // İşlem bitince kutucukları temizle
+    } else {
+      alert("Hata: " + error.message);
     }
   };
 
@@ -151,12 +202,9 @@ export default function GuvenlikPanel() {
     router.push("/login");
   };
 
-  // --- DÜZELTİLMİŞ SIRALAMA MANTIĞI ---
+  // --- SIRALAMA VE FİLTRELEME MANTIĞI ---
   const parseDateTime = (tarihStr: string, saatStr: string) => {
-    // Saat formatı "09:30" veya "09:30 - 10:30" olabilir.
-    // Sadece ilk saati alıyoruz (09:30).
     const temizSaat = saatStr ? saatStr.split('-')[0].trim() : "00:00";
-    // Tarih YYYY-MM-DD formatında olmalı.
     return new Date(`${tarihStr}T${temizSaat}`).getTime();
   };
 
@@ -173,24 +221,38 @@ export default function GuvenlikPanel() {
       if (durumFiltresi === 'hepsi') return true;
       if (durumFiltresi === 'iceride' && kisi.durum === 'iceride') return true;
       if (durumFiltresi === 'onaylandi' && kisi.durum === 'onaylandi') return true;
-      if (durumFiltresi === 'cikis_yapti' && kisi.durum === 'cikis_yapti') return true;
+      if (durumFiltresi === 'cikis_yapti' && (kisi.durum === 'cikis_yapti' || kisi.durum === 'reddedildi')) return true;
 
       return false;
     })
     .sort((a, b) => {
-      // 1. Tarih/Saat Karşılaştırması (Artık Parselenmiş Değerler Kullanılıyor)
       const zamanA = parseDateTime(a.ziyaret_tarihi, a.ziyaret_saati);
       const zamanB = parseDateTime(b.ziyaret_tarihi, b.ziyaret_saati);
 
       if (siralama === "yeniden-eskiye") return zamanB - zamanA;
       if (siralama === "eskiden-yeniye") return zamanA - zamanB;
       
-      // 2. İsim Karşılaştırması
       if (siralama === "a-z") return a.ziyaretci_ad_soyad.localeCompare(b.ziyaretci_ad_soyad);
       if (siralama === "z-a") return b.ziyaretci_ad_soyad.localeCompare(a.ziyaretci_ad_soyad);
 
       return 0;
     });
+
+  // YENİ: ÇOKLU SEÇİM FONKSİYONLARI
+  const gorunenIceridekiler = filtrelenmisVeSiralanmisListe.filter(k => k.durum === 'iceride');
+  
+  const handleSecim = (id: number) => {
+    setSeciliZiyaretciler(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const handleTumunuSec = () => {
+    if (seciliZiyaretciler.length === gorunenIceridekiler.length && gorunenIceridekiler.length > 0) {
+      setSeciliZiyaretciler([]);
+    } else {
+      setSeciliZiyaretciler(gorunenIceridekiler.map(k => k.id));
+    }
+  };
+
 
   if (yetkiHatasi) {
     return (
@@ -211,7 +273,7 @@ export default function GuvenlikPanel() {
             <Link href="/" className="absolute top-6 left-6 bg-white p-3 rounded-full shadow-lg hover:bg-slate-50 transition-colors text-slate-600">
                 <Home size={24} />
             </Link>
-            
+           
             <div className="max-w-4xl w-full">
                 <div className="text-center mb-10">
                     <h1 className="text-3xl font-black text-slate-800 tracking-tight mb-2">GÜVENLİK İZLEME MODU</h1>
@@ -240,6 +302,10 @@ export default function GuvenlikPanel() {
         </main>
       );
   }
+
+  // YENİ: 17:00 UYARISI İÇİN MANTIK
+  const mesaiBittiMi = zaman.getHours() >= 17;
+  const icerideKalanSayisi = ziyaretciler.filter(k => k.durum === 'iceride' && k.ziyaret_tarihi === bugunTarihi).length;
 
   return (
     <main className="min-h-screen bg-slate-100 font-sans p-4 relative">
@@ -283,7 +349,7 @@ export default function GuvenlikPanel() {
         </div>
       </div>
 
-      {/* İSTATİSTİKLER (KURUMSAL DİL GÜNCELLEMESİ) */}
+      {/* İSTATİSTİKLER */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 cursor-pointer select-none">
          <div onClick={() => setDurumFiltresi("hepsi")} className={`bg-white p-4 rounded-xl shadow-sm border flex items-center justify-between transition-all hover:scale-[1.02] ${durumFiltresi === 'hepsi' ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/50' : 'border-slate-200'}`}>
             <div><p className="text-[10px] font-bold text-slate-400 uppercase">TOPLAM ZİYARETÇİ</p><p className="text-2xl font-black text-slate-800">{istatistikler.toplam}</p></div>
@@ -303,6 +369,22 @@ export default function GuvenlikPanel() {
          </div>
       </div>
 
+      {/* YENİ: SAAT 17:00 UYARISI */}
+      {mesaiBittiMi && icerideKalanSayisi > 0 && (
+        <div className="bg-orange-50 border border-orange-200 p-5 rounded-2xl mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm animate-in fade-in">
+           <div className="flex items-center gap-4">
+              <div className="bg-orange-100 p-3 rounded-xl text-orange-600"><Clock size={24}/></div>
+              <div>
+                 <h3 className="text-orange-900 font-bold text-lg">Mesai Saati Tamamlandı (17:00)</h3>
+                 <p className="text-orange-700 text-sm font-medium mt-0.5">Sistemde bugün için hala <b>{icerideKalanSayisi} ziyaretçi</b> içeride görünmektedir. Lütfen teyit edip çıkış işlemlerini tamamlayınız.</p>
+              </div>
+           </div>
+           <button onClick={() => { setAktifFiltre("bugun"); setDurumFiltresi("iceride"); }} className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm transition-colors whitespace-nowrap shadow-md">
+              İçeridekileri Göster
+           </button>
+        </div>
+      )}
+
       {/* LİSTE */}
       <div className="bg-white rounded-xl shadow p-4 overflow-x-auto min-h-[500px]">
         <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
@@ -314,7 +396,14 @@ export default function GuvenlikPanel() {
             </div>
             
             <div className="flex items-center gap-2 w-full md:w-auto">
-                <div className="relative">
+                {/* YENİ: SEÇİLENLERİ TOPLU ÇIKIŞ YAP BUTONU */}
+                {seciliZiyaretciler.length > 0 && (
+                   <button onClick={topluCikisYap} className="bg-slate-800 text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-slate-900 transition-colors animate-in fade-in shadow-md mr-2">
+                      <LogOut size={16}/> Çıkış Yap ({seciliZiyaretciler.length})
+                   </button>
+                )}
+
+                <div className="relative hidden md:block">
                     <ArrowUpDown size={16} className="absolute left-3 top-3 text-slate-400 pointer-events-none"/>
                     <select 
                       value={siralama}
@@ -338,7 +427,20 @@ export default function GuvenlikPanel() {
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50 text-slate-500 uppercase font-bold text-xs">
             <tr>
-              <th className="p-3 w-12 text-center rounded-l-lg">#</th>
+              {/* YENİ: EĞER BUGÜN SEKMESİNDEYSEK TÜMÜNÜ SEÇ KUTUCUĞU ÇIKAR */}
+              {aktifFiltre === 'bugun' && (
+                <th className="p-3 w-10 text-center rounded-l-lg">
+                   <input 
+                      type="checkbox" 
+                      onChange={handleTumunuSec} 
+                      checked={seciliZiyaretciler.length > 0 && seciliZiyaretciler.length === gorunenIceridekiler.length} 
+                      disabled={gorunenIceridekiler.length === 0} 
+                      className="accent-emerald-600 w-4 h-4 cursor-pointer mt-1"
+                      title="Tüm İçeridekileri Seç"
+                   />
+                </th>
+              )}
+              <th className={`p-3 w-12 text-center ${aktifFiltre !== 'bugun' ? 'rounded-l-lg' : ''}`}>#</th>
               <th className="p-3">Misafir Bilgisi</th>
               <th className="p-3">Tip / Araç</th>
               <th className="p-3">Randevu Saati</th>
@@ -348,14 +450,31 @@ export default function GuvenlikPanel() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {yukleniyor ? (
-                <tr><td colSpan={6} className="p-10 text-center text-slate-400 font-bold animate-pulse">Veriler Yükleniyor...</td></tr>
+                <tr><td colSpan={7} className="p-10 text-center text-slate-400 font-bold animate-pulse">Veriler Yükleniyor...</td></tr>
             ) : filtrelenmisVeSiralanmisListe.length === 0 ? (
-                <tr><td colSpan={6} className="p-10 text-center text-slate-400 font-bold">Kayıt bulunamadı.</td></tr>
+                <tr><td colSpan={7} className="p-10 text-center text-slate-400 font-bold">Kayıt bulunamadı.</td></tr>
             ) : (
                 filtrelenmisVeSiralanmisListe.map((kisi, index) => (
-              <tr key={kisi.id} onClick={() => setSecilenZiyaretci(kisi)} className="hover:bg-emerald-50/50 cursor-pointer transition-colors group">
+              <tr key={kisi.id} onClick={() => setSecilenZiyaretci(kisi)} className={`cursor-pointer transition-colors group ${seciliZiyaretciler.includes(kisi.id) ? 'bg-emerald-50' : 'hover:bg-emerald-50/50'}`}>
+                
+                {/* YENİ: CHECKBOX ALANI */}
+                {aktifFiltre === 'bugun' && (
+                  <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                     {kisi.durum === 'iceride' ? (
+                       <input 
+                         type="checkbox" 
+                         checked={seciliZiyaretciler.includes(kisi.id)} 
+                         onChange={() => handleSecim(kisi.id)} 
+                         className="accent-emerald-600 w-4 h-4 cursor-pointer mt-1"
+                       />
+                     ) : (
+                       <span className="w-4 h-4 block opacity-20 bg-slate-200 rounded mx-auto mt-1"></span>
+                     )}
+                  </td>
+                )}
+
                 <td className="p-3 text-center font-bold text-slate-400 text-xs">
-                    {index + 1}
+                  {index + 1}
                 </td>
                 
                 <td className="p-3">
@@ -383,14 +502,15 @@ export default function GuvenlikPanel() {
                   <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase border ${
                       kisi.durum === 'iceride' ? 'bg-emerald-100 text-emerald-700 border-emerald-200 animate-pulse' : 
                       kisi.durum === 'cikis_yapti' ? 'bg-gray-100 text-gray-400 border-gray-200 line-through' : 
+                      kisi.durum === 'reddedildi' ? 'bg-red-100 text-red-600 border-red-200' :
                       'bg-amber-50 text-amber-700 border-amber-100'
                   }`}>
-                      {kisi.durum === 'iceride' ? 'İÇERİDE' : kisi.durum === 'cikis_yapti' ? 'ÇIKIŞ YAPTI' : 'BEKLENİYOR'}
+                      {kisi.durum === 'iceride' ? 'İÇERİDE' : kisi.durum === 'cikis_yapti' ? 'ÇIKIŞ YAPTI' : kisi.durum === 'reddedildi' ? 'REDDEDİLDİ' : 'BEKLENİYOR'}
                   </span>
                 </td>
                 <td className="p-3 flex justify-center gap-2">
-                  {kisi.durum === 'onaylandi' && <button onClick={(e) => durumGuncelle(kisi.id, 'iceride', e)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition-all transform active:scale-95">GİRİŞ VER</button>}
-                  {kisi.durum === 'iceride' && <button onClick={(e) => durumGuncelle(kisi.id, 'cikis_yapti', e)} className="bg-slate-700 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition-all transform active:scale-95">ÇIKIŞ YAP</button>}
+                  {kisi.durum === 'onaylandi' && <button onClick={(e) => durumGuncelle(kisi.id, 'iceride', "", e)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition-all transform active:scale-95">GİRİŞ VER</button>}
+                  {kisi.durum === 'iceride' && <button onClick={(e) => durumGuncelle(kisi.id, 'cikis_yapti', "", e)} className="bg-slate-700 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition-all transform active:scale-95">ÇIKIŞ YAP</button>}
                 </td>
               </tr>
             )))}
@@ -398,7 +518,7 @@ export default function GuvenlikPanel() {
         </table>
       </div>
 
-      {/* DETAY MODAL (Aynı Kaldı) */}
+      {/* DETAY MODAL */}
       {secilenZiyaretci && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
            <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
@@ -408,18 +528,33 @@ export default function GuvenlikPanel() {
             </div>
             
             <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto bg-slate-50">
-               <div className={`p-4 rounded-xl border flex items-center gap-3 ${secilenZiyaretci.durum === 'iceride' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
+               <div className={`p-4 rounded-xl border flex items-center gap-3 ${secilenZiyaretci.durum === 'iceride' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : secilenZiyaretci.durum === 'reddedildi' ? 'bg-red-50 border-red-200 text-red-600' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
                   <Activity size={24} />
                   <div>
                       <div className="text-xs font-bold uppercase opacity-70">Anlık Durum</div>
-                      <div className="font-black text-lg uppercase">{secilenZiyaretci.durum === 'iceride' ? 'YERLEŞKEDE' : secilenZiyaretci.durum === 'cikis_yapti' ? 'AYRILDI' : 'GİRİŞ YAPMADI'}</div>
+                      <div className="font-black text-lg uppercase">{secilenZiyaretci.durum === 'iceride' ? 'YERLEŞKEDE' : secilenZiyaretci.durum === 'cikis_yapti' ? 'AYRILDI' : secilenZiyaretci.durum === 'reddedildi' ? 'GİRİŞ REDDEDİLDİ' : 'GİRİŞ YAPMADI'}</div>
                   </div>
                </div>
                
+               {secilenZiyaretci.durum !== 'onaylandi' && (
+                 <div className={`p-3 rounded-xl border flex items-center gap-3 shadow-sm ${
+                    secilenZiyaretci.durum === 'reddedildi' ? 'bg-red-50 border-red-200 text-red-800' :
+                    secilenZiyaretci.durum === 'iceride' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+                    'bg-slate-100 border-slate-200 text-slate-800'
+                 }`}>
+                    <UserCheck size={20} className={secilenZiyaretci.durum === 'reddedildi' ? 'text-red-500' : secilenZiyaretci.durum === 'iceride' ? 'text-emerald-500' : 'text-slate-500'} />
+                    <span className="text-sm font-medium">
+                       {secilenZiyaretci.durum === 'reddedildi' && <>Bu ziyaretçi <b>{secilenZiyaretci.islem_yapan_guvenlik || "Eski Kayıt (Bilinmiyor)"}</b> tarafından <b>reddedildi</b>.</>}
+                       {secilenZiyaretci.durum === 'iceride' && <>Bu ziyaretçi <b>{secilenZiyaretci.islem_yapan_guvenlik || "Eski Kayıt (Bilinmiyor)"}</b> tarafından <b>içeri alındı</b>.</>}
+                       {secilenZiyaretci.durum === 'cikis_yapti' && <>Bu ziyaretçinin çıkış işlemi <b>{secilenZiyaretci.islem_yapan_guvenlik || "Eski Kayıt (Bilinmiyor)"}</b> tarafından <b>yapıldı</b>.</>}
+                    </span>
+                 </div>
+               )}
+
                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                  <h3 className="text-xs font-black text-slate-400 uppercase mb-3 border-b pb-1">Ziyaret Detayları</h3>
                  <div className="grid grid-cols-2 gap-4 mb-4">
-                   <div><div className="flex items-center gap-1 text-xs text-slate-500 mb-1"><User size={12}/> Ev Sahibi</div><div className="font-bold text-slate-800">{secilenZiyaretci.ziyaret_edilecek_kisi}</div></div>
+                   <div><div className="flex items-center gap-1 text-xs text-slate-500 mb-1"><User size={12}/> Personel</div><div className="font-bold text-slate-800">{secilenZiyaretci.ziyaret_edilecek_kisi}</div></div>
                    <div><div className="flex items-center gap-1 text-xs text-slate-500 mb-1"><MapPin size={12}/> Kampüs</div><div className="font-bold text-slate-800 text-sm">{secilenZiyaretci.kampusler ? secilenZiyaretci.kampusler.isim : "Bilinmiyor"}</div></div>
                  </div>
                  <div className="grid grid-cols-2 gap-4 mb-4">
@@ -433,6 +568,13 @@ export default function GuvenlikPanel() {
                     <div className="font-bold text-slate-800">{secilenZiyaretci.ziyaretci_gsm || "-"}</div>
                  </div>
                </div>
+
+               {secilenZiyaretci.durum === 'reddedildi' && (
+                  <div className="bg-red-50 p-4 rounded-xl border border-red-200 shadow-sm mt-4 animate-in fade-in">
+                     <h3 className="text-xs font-black text-red-600 uppercase mb-2 flex items-center gap-1"><ShieldAlert size={14}/> Güvenlik Red Açıklaması</h3>
+                     <p className="text-sm font-bold text-slate-700 italic">"{secilenZiyaretci.red_nedeni || "Neden belirtilmemiş."}"</p>
+                  </div>
+               )}
               
                {(secilenZiyaretci.plaka || secilenZiyaretci.firma_bilgisi) && (
                  <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm">
@@ -447,12 +589,35 @@ export default function GuvenlikPanel() {
 
             <div className="bg-white p-4 border-t flex justify-end gap-2">
                  <button onClick={() => setSecilenZiyaretci(null)} className="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg font-bold text-sm hover:bg-gray-300 transition-colors">Kapat</button>
-                 {secilenZiyaretci.durum === 'onaylandi' && <button onClick={() => durumGuncelle(secilenZiyaretci.id, 'iceride')} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold text-sm shadow hover:bg-emerald-700">GİRİŞ VER</button>}
-                 {secilenZiyaretci.durum === 'iceride' && <button onClick={() => durumGuncelle(secilenZiyaretci.id, 'cikis_yapti')} className="bg-slate-700 text-white px-6 py-2 rounded-lg font-bold text-sm shadow hover:bg-slate-800">ÇIKIŞ YAP</button>}
+                 
+                 {secilenZiyaretci.durum === 'onaylandi' && (
+                   <>
+                     <button onClick={() => setShowRedModal(true)} className="bg-red-50 text-red-600 border border-red-200 px-6 py-2 rounded-lg font-bold text-sm hover:bg-red-100 transition-colors">REDDET</button>
+                     <button onClick={() => durumGuncelle(secilenZiyaretci.id, 'iceride')} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold text-sm shadow hover:bg-emerald-700 transition-colors">GİRİŞ VER</button>
+                   </>
+                 )}
+                 
+                 {secilenZiyaretci.durum === 'iceride' && <button onClick={() => durumGuncelle(secilenZiyaretci.id, 'cikis_yapti')} className="bg-slate-700 text-white px-6 py-2 rounded-lg font-bold text-sm shadow hover:bg-slate-800 transition-colors">ÇIKIŞ YAP</button>}
             </div>
            </div>
         </div>
       )}
+
+      {/* REDDETME MODALI */}
+      {showRedModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+           <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6 animate-in zoom-in-95">
+              <div className="flex items-center gap-3 mb-4"><div className="bg-red-100 p-2 rounded-full text-red-600"><ShieldAlert size={24}/></div><h3 className="font-bold text-slate-800 text-lg">Giriş Reddi</h3></div>
+              <p className="text-xs text-slate-500 mb-4 font-medium leading-relaxed">Lütfen personelin ekranına yansıyacak olan reddedilme nedenini giriniz.</p>
+              <textarea autoFocus rows={3} value={redNedeni} onChange={(e) => setRedNedeni(e.target.value)} className="w-full p-3 border border-slate-300 rounded-xl font-medium text-slate-800 outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 mb-4 text-sm resize-none" placeholder="Neden belirtiniz..."></textarea>
+              <div className="flex gap-3 justify-end">
+                  <button onClick={() => { setShowRedModal(false); setRedNedeni(""); }} className="px-4 py-2 text-slate-500 font-bold text-sm hover:text-slate-700 transition-colors">Vazgeç</button>
+                  <button onClick={() => { if(redNedeni.trim().length < 3) { alert("Geçerli bir neden giriniz."); return; } durumGuncelle(secilenZiyaretci.id, 'reddedildi', redNedeni); }} className="bg-red-600 text-white px-5 py-2 rounded-xl font-bold text-sm hover:bg-red-700 transition-all shadow-md">Reddet</button>
+              </div>
+           </div>
+        </div>
+      )}
+
     </main>
   );
 }

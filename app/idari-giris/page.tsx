@@ -1,54 +1,46 @@
 "use client";
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { 
   Lock, Mail, ArrowRight, Eye, EyeOff, 
   LayoutDashboard, CloudSun 
 } from "lucide-react";
-
 export default function IdariGiris() {
+  const supabase = createClient();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-
     try {
       const { data: { user }, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
-
       if (authError || !user) throw new Error("E-posta veya şifre hatalı.");
-
       // GÜVENLİKÇİ KONTROLÜ
       const { data: guvenlikKaydi } = await supabase
         .from('personel_profilleri')
         .select('id')
         .eq('user_id', user.id)
         .single();
-
       if (guvenlikKaydi) {
         await supabase.auth.signOut(); 
         throw new Error("Erişim Reddedildi: Bu panel sadece İdari Personel içindir.");
       }
-
       router.push("/idari-panel");
-
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
   };
-
   return (
     <main className="min-h-screen relative flex font-sans overflow-hidden">
       
@@ -62,7 +54,6 @@ export default function IdariGiris() {
          {/* Koyu Perde: Sol taraf daha koyu, sağ taraf biraz daha şeffaf olsun ki form okunsun */}
          <div className="absolute inset-0 bg-gradient-to-r from-slate-900/90 via-slate-900/80 to-slate-900/60"></div>
       </div>
-
       {/* --- 2. SOL TARAF (İÇERİK) --- */}
       <div className="hidden lg:flex w-1/2 relative z-10 items-center justify-center p-12">
         <div className="max-w-lg w-full">
@@ -83,7 +74,6 @@ export default function IdariGiris() {
            <p className="text-slate-200 text-lg leading-relaxed mb-8 animate-in slide-in-from-bottom duration-1000 delay-200 font-medium drop-shadow-md">
              Tüm yerleşkelerin ziyaretçi trafiğini, güvenlik protokollerini ve personel performansını tek merkezden yönetin.
            </p>
-
            {/* WIDGET */}
            <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-xl flex items-center justify-between animate-in zoom-in duration-1000 delay-300 shadow-2xl">
               <div className="flex items-center gap-3">
@@ -106,7 +96,6 @@ export default function IdariGiris() {
            </div>
         </div>
       </div>
-
       {/* --- 3. SAĞ TARAF (GLASS FORM) --- */}
       <div className="w-full lg:w-1/2 relative z-10 flex items-center justify-center p-6">
          
@@ -120,13 +109,11 @@ export default function IdariGiris() {
                <h2 className="text-3xl font-black text-white tracking-tight drop-shadow-md">Yönetici Girişi</h2>
                <p className="text-slate-200 mt-2 font-medium text-sm">Kurumsal kimlik bilgilerinizle oturum açın.</p>
             </div>
-
             {error && (
               <div className="bg-red-500/20 backdrop-blur-md border border-red-500/50 text-white p-4 mb-6 rounded-xl shadow-lg text-sm font-bold flex items-center gap-2 animate-in shake">
                 <span>⚠️</span> {error}
               </div>
             )}
-
             <form onSubmit={handleLogin} className="space-y-5">
                
                <div className="space-y-1">
@@ -144,7 +131,6 @@ export default function IdariGiris() {
                      />
                   </div>
                </div>
-
                <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-300 uppercase ml-1">Şifre</label>
                   <div className="relative group">
@@ -169,7 +155,6 @@ export default function IdariGiris() {
                      <a href="#" className="text-xs font-bold text-slate-300 hover:text-white transition-colors hover:underline">Şifremi Unuttum?</a>
                   </div>
                </div>
-
                <button 
                  type="submit" 
                  disabled={loading}
@@ -183,19 +168,15 @@ export default function IdariGiris() {
                    </>
                  )}
                </button>
-
             </form>
-
             <div className="mt-8 pt-6 border-t border-white/10 text-center">
                <p className="text-xs text-slate-300 font-medium">
                  © 2026 THY Global Teknoloji A.Ş. <br/> 
                  Güvenlik Personeli Girişi için <a href="/guvenlik-giris" className="text-white font-bold hover:underline hover:text-red-400 transition-colors">tıklayınız.</a>
                </p>
             </div>
-
          </div>
       </div>
-
     </main>
   );
 }

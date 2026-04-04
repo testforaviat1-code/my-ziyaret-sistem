@@ -1,15 +1,7 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  typescript: {
-    // !! UYARI !!
-    // Projeyi canlıya alırken TypeScript hatalarını görmezden geliyoruz.
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    // !! UYARI !!
-    // Projeyi canlıya alırken ESLint (yazım kuralları) hatalarını görmezden geliyoruz.
-    ignoreDuringBuilds: true,
-  },
+import type { NextConfig } from 'next';
+
+const nextConfig: NextConfig = {
+  /* Gerekli olursa ileride ayarları buraya ekleriz */
 };
 
 export default nextConfig;

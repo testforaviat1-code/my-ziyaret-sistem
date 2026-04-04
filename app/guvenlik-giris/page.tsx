@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { 
   Lock, Mail, ArrowRight, Eye, EyeOff, 
@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 
 export default function GuvenlikGiris() {
+  const supabase = createClient();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
