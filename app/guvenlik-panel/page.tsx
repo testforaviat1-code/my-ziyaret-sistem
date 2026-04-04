@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { sistemeLogYaz } from '@/lib/supabase/audit';
+import { guvenlikIslemi, topluGuvenlikIslemi } from "@/app/actions/guvenlik";
 import { 
   
   LogOut, ShieldAlert, RefreshCw, X, 
@@ -164,15 +164,6 @@ export default function GuvenlikPanel() {
       // 1. Kendi ekranındaki listeyi güncelleyen mevcut kodun (Burası sende zaten var)
       setZiyaretciler((liste) => liste.map((k) => k.id === id ? { ...k, durum: yeniDurum, red_nedeni: n, islem_yapan_guvenlik: personelAdi } : k));
 
-      // 2. İŞTE KARAKUTU BURADA DEVREYE GİRİYOR! (Bunu yeni ekliyoruz)
-      sistemeLogYaz(
-        yeniDurum,            // İşlem türü (örn: 'iceride', 'cikti')
-        'talepler',           // Tablo adı
-        String(id),           // Ziyaretçi Talep ID'si
-        { bilgi: "eski durum" }, // Eski değer 
-        payload,              // Yeni değer
-        `Güvenlik, ${id} numaralı talebin durumunu '${yeniDurum}' yaptı.` // IT Müdürünün okuyacağı açıklama
-      );
     }
   };
 
@@ -182,18 +173,17 @@ export default function GuvenlikPanel() {
     const onayi = window.confirm(`${seciliZiyaretciler.length} ziyaretçinin çıkış işlemini onaylıyor musunuz?`);
     if (!onayi) return;
 
-    const payload = { 
-      durum: 'cikis_yapti', 
-      islem_yapan_guvenlik: personelAdi 
-    };
+    // Ekranı güncelle
+    setZiyaretciler((liste) => liste.map((k) => seciliZiyaretciler.includes(k.id) ? { ...k, durum: 'cikis_yapti', islem_yapan_guvenlik: personelAdi } : k));
+    const islemListesi = [...seciliZiyaretciler];
+    setSeciliZiyaretciler([]); 
 
-    const { error } = await supabase.from('talepler').update(payload).in('id', seciliZiyaretciler);
-
-    if (!error) {
-      setZiyaretciler((liste) => liste.map((k) => seciliZiyaretciler.includes(k.id) ? { ...k, ...payload } : k));
-      setSeciliZiyaretciler([]); // İşlem bitince kutucukları temizle
-    } else {
+    try {
+      // Çelik kasaya gönder
+      await topluGuvenlikIslemi(islemListesi);
+    } catch (error: any) {
       alert("Hata: " + error.message);
+      verileriGetir();
     }
   };
 

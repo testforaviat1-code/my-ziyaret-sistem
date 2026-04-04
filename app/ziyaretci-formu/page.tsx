@@ -103,10 +103,10 @@ export default function ZiyaretciForm() {
 
     // Kategori ve Açıklamayı Birleştir (Açıklama boşsa sadece kategoriyi yaz)
     const birlesikNeden = formData.nedenAciklama ? `${formData.nedenKategori} - ${formData.nedenAciklama}` : formData.nedenKategori;
-
+    
     const tumZiyaretciler = [
         {
-            ziyaretci_ad_soyad: formData.adSoyad,
+            ziyaretci_ad_soyad: formData.adSoyad, 
             ziyaretci_tc: formData.tc,
             ziyaretci_gsm: formData.gsm,
             kampus_id: Number(formData.kampus_id),
@@ -123,7 +123,7 @@ export default function ZiyaretciForm() {
             ziyaretci_tc: p.tc,
             ziyaretci_gsm: formData.gsm,
             kampus_id: Number(formData.kampus_id),
-            ziyaret_edilecek_kisi: formData.evSahibi.trim(),
+            ziyaret_edilecek_kisi: formData.evSahibi.trim(),  
             ziyaret_nedeni: birlesikNeden,
             ziyaret_tarihi: formData.tarih,
             ziyaret_saati: formData.saat,

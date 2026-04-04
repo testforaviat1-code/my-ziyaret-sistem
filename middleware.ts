@@ -60,5 +60,7 @@ export const config = {
     '/idari-panel/:path*',
     '/taleplerim/:path*',
     '/ziyaretci-formu/:path*',
+    '/talep/:path*',      // <-- AÇIK KAPI KAPATILDI
+    '/dashboard/:path*',  // <-- AÇIK KAPI KAPATILDI
   ],
 }
