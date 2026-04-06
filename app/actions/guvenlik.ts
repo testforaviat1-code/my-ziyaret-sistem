@@ -30,26 +30,13 @@ export async function guvenlikIslemi(talepId: number, yeniDurum: string, redNede
   const { error } = await supabase.from('talepler').update(payload).eq('id', talepId);
   if (error) throw new Error("Güncelleme başarısız: " + error.message);
 
-  // KARAKUTU LOG
-  await supabase.from('audit_log').insert({
-    kullanici_id: user.id,
-    kullanici_email: user.email,
-    kullanici_rol: profil.rol,
-    islem: yeniDurum,
-    tablo_adi: 'talepler',
-    kayit_id: String(talepId),
-    eski_deger: { bilgi: "Güvenli Sunucu İşlemi" },
-    yeni_deger: payload,
-    aciklama: `[ZIRHLI ONAY] ${profil.tam_ad} personeli, ${talepId} ID'li talebi '${yeniDurum}' yaptı.`
-  });
-
   return { success: true };
 }
-
 // 2. TOPLU İŞLEM
 export async function topluGuvenlikIslemi(talepIdListesi: number[]) {
   const cookieStore = await cookies(); // BURAYA DA 'await' EKLEDİK (Hata buradaydı)
   
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -58,7 +45,8 @@ export async function topluGuvenlikIslemi(talepIdListesi: number[]) {
         get(name: string) { return cookieStore.get(name)?.value; } 
       } 
     }
-  );
+  ); 
+  
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Yetkisiz işlem!");

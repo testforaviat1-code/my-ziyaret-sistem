@@ -161,9 +161,17 @@ export default function GuvenlikPanel() {
     const { error } = await supabase.from("talepler").update(payload).eq("id", id);
     
     if (!error) {
-      // 1. Kendi ekranındaki listeyi güncelleyen mevcut kodun (Burası sende zaten var)
+      // 1. Kendi ekranındaki listeyi günceller
       setZiyaretciler((liste) => liste.map((k) => k.id === id ? { ...k, durum: yeniDurum, red_nedeni: n, islem_yapan_guvenlik: personelAdi } : k));
 
+      // --- İŞTE SENİN İSTEDİĞİN O SİHİRLİ DOKUNUŞ BURASI ---
+      if (yeniDurum === 'reddedildi') {
+        alert("İşlem başarıyla tamamlandı!");
+        setShowRedModal(false); // Kırmızı reddetme kutusunu kapatır
+        setSecilenZiyaretci(null); // Detay penceresini kapatır
+        window.location.reload(); // Sayfayı yenileyip tertemiz yapar
+      }
+      // -----------------------------------------------------
     }
   };
 
@@ -181,6 +189,8 @@ export default function GuvenlikPanel() {
     try {
       // Çelik kasaya gönder
       await topluGuvenlikIslemi(islemListesi);
+      
+window.location.reload();
     } catch (error: any) {
       alert("Hata: " + error.message);
       verileriGetir();

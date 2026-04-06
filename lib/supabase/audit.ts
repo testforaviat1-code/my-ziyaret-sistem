@@ -22,18 +22,7 @@ export const sistemeLogYaz = async (
       .eq('id', user.id)
       .single();
 
-    // Ve bilgileri Karakutuya (audit_log) fırlatalım
-    await supabase.from('audit_log').insert({
-      kullanici_id: user.id,
-      kullanici_email: user.email,
-      kullanici_rol: profil?.rol || 'Bilinmiyor',
-      islem: islem,
-      tablo_adi: tabloAdi,
-      kayit_id: String(kayitId),
-      eski_deger: eskiDeger,
-      yeni_deger: yeniDeger,
-      aciklama: `${profil?.tam_ad || user.email} adlı personel: ${yapilanIs}`
-    });
+    
 
     console.log("✅ Log başarıyla karakutuya yazıldı.");
   } catch (error) {
