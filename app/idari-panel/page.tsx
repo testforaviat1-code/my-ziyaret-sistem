@@ -125,11 +125,35 @@ export default function IdariPanel() {
   const kampusGuncelle = async (personelId: string, yeniKampusId: string) => {
     setIslemYapiliyor(personelId);
     const targetKampusId = yeniKampusId === "" ? null : Number(yeniKampusId);
+    
+    // 1. Veritabanını güncelle
     const { error } = await supabase.from('profiller').update({ kampus_id: targetKampusId }).eq('id', personelId);
-    if (!error) await guvenlikleriGetir(); else alert("Hata: " + error.message);
+    
+    if (error) {
+      alert("Atama sırasında hata oluştu: " + error.message);
+    } else {
+      // 2. Bekleme yapmadan anında ekrandaki veriyi (State) güncelle
+      setGuvenlikPersoneli((eskiListe) => 
+        eskiListe.map(personel => {
+          if (personel.id === personelId) {
+            const yeniKampus = kampusler.find(k => k.id === targetKampusId);
+            return { 
+              ...personel, 
+              kampus_id: targetKampusId, 
+              kampusler: yeniKampus ? { isim: yeniKampus.isim } : null 
+            };
+          }
+          return personel;
+        })
+      );
+      
+      // 3. Şık bir başarı mesajı
+      alert("Personelin yeni görev yeri başarıyla güncellendi!");
+    }
     setIslemYapiliyor(null);
   };
 
+  // YANLIŞLIKLA SİLİNEN KISIM (GERİ GELDİ)
   const handleKampusEkle = async () => {
     if (!yeniKampusIsim.trim()) return;
     const { error } = await supabase.from('kampusler').insert([{ isim: yeniKampusIsim.trim().toUpperCase() }]);
