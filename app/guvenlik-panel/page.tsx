@@ -22,6 +22,7 @@ export default function GuvenlikPanel() {
 
   // REDDETME MODALI İÇİN STATE'LER
   const [showRedModal, setShowRedModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [redNedeni, setRedNedeni] = useState("");
 
   // YENİ: ÇOKLU SEÇİM (TOPLU ÇIKIŞ) STATE'İ
@@ -166,10 +167,13 @@ export default function GuvenlikPanel() {
 
       // --- İŞTE SENİN İSTEDİĞİN O SİHİRLİ DOKUNUŞ BURASI ---
       if (yeniDurum === 'reddedildi') {
-        alert("İşlem başarıyla tamamlandı!");
-        setShowRedModal(false); // Kırmızı reddetme kutusunu kapatır
-        setSecilenZiyaretci(null); // Detay penceresini kapatır
-        window.location.reload(); // Sayfayı yenileyip tertemiz yapar
+        // --- İŞTE SİHİRLİ DOKUNUŞ BURASI ---
+      if (yeniDurum === 'reddedildi') {
+        setShowRedModal(false); 
+        setSecilenZiyaretci(null); 
+        setShowSuccessModal(true); // ŞIK PENCEREYİ AÇAR
+      }
+       
       }
       // -----------------------------------------------------
     }
@@ -614,6 +618,23 @@ window.location.reload();
                   <button onClick={() => { setShowRedModal(false); setRedNedeni(""); }} className="px-4 py-2 text-slate-500 font-bold text-sm hover:text-slate-700 transition-colors">Vazgeç</button>
                   <button onClick={() => { if(redNedeni.trim().length < 3) { alert("Geçerli bir neden giriniz."); return; } durumGuncelle(secilenZiyaretci.id, 'reddedildi', redNedeni); }} className="bg-red-600 text-white px-5 py-2 rounded-xl font-bold text-sm hover:bg-red-700 transition-all shadow-md">Reddet</button>
               </div>
+           </div>
+        </div>
+      )}
+{/* BAŞARILI İŞLEM MODALI */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+           <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6 text-center animate-in zoom-in-95">
+              <div className="bg-emerald-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-600">
+                 <UserCheck size={32}/>
+              </div>
+              <h3 className="font-black text-slate-800 text-xl mb-2">İşlem Başarılı!</h3>
+              <p className="text-sm text-slate-500 mb-6 font-medium">Ziyaretçi girişi başarıyla reddedildi.</p>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-md">
+                Tamam
+              </button>
            </div>
         </div>
       )}
