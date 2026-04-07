@@ -23,8 +23,6 @@ export const sistemeLogYaz = async (
       .single();
 
     
-
-    console.log("✅ Log başarıyla karakutuya yazıldı.");
   } catch (error) {
     console.error("❌ Log yazılırken hata oluştu:", error);
   }

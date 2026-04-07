@@ -19,6 +19,7 @@ export default function GuvenlikPanel() {
   const [aramaMetni, setAramaMetni] = useState("");
   const [yukleniyor, setYukleniyor] = useState(true);
   const [secilenZiyaretci, setSecilenZiyaretci] = useState<any>(null);
+  const [showGirisSuccessModal, setShowGirisSuccessModal] = useState(false);
 
   // REDDETME MODALI İÇİN STATE'LER
   const [showRedModal, setShowRedModal] = useState(false);
@@ -60,6 +61,12 @@ export default function GuvenlikPanel() {
   const bugunTarihi = new Date().toISOString().split('T')[0];
   const maskeleTC = (tc: string) => (!tc || tc.length < 11) ? "***********" : `${tc.substring(0, 2)}*******${tc.substring(9, 11)}`;
   const formatTarih = (tarih: string) => (!tarih) ? "-" : tarih.split('-').reverse().join('.');
+  const maskeleTelefon = (tel: string) => {
+    if (!tel) return "-";
+    const temizTel = tel.replace(/\s/g, ""); // Varsa aradaki boşlukları siler
+    if (temizTel.length < 4) return temizTel; 
+    return `${temizTel.substring(0, 2)}*******${temizTel.substring(temizTel.length - 2)}`;
+  };
 
   // --- 1. MOUNT VE SAAT AYARI ---
   useEffect(() => {
@@ -111,6 +118,11 @@ export default function GuvenlikPanel() {
   }, [router]);
 
   // --- 3. VERİLERİ GETİR ---
+  // KVKK: 24 Saat Kuralı için dünün tarihini hesapla
+  const dun = new Date();
+  dun.setDate(dun.getDate() - 1); // Bugünden 1 gün çıkar
+  const dününTarihi = dun.toISOString().split('T')[0]; // Örn: "2026-04-05"
+
   const verileriGetir = async () => {
     const hedefKampusId = isAdmin ? adminSecilenKampusId : (personelKampus ? personelKampus.id : null);
     if (!hedefKampusId) return; 
@@ -118,10 +130,12 @@ export default function GuvenlikPanel() {
     setYukleniyor(true);
     setSeciliZiyaretciler([]); // Filtre değişince seçimleri sıfırla
 
+  
     let query = supabase
-      .from("talepler")
-      .select("*, kampusler(isim)") 
-      .eq('kampus_id', hedefKampusId);
+    .from("talepler")
+    .select("*, bitis_tarihi, kampusler(isim)")
+    .eq('kampus_id', hedefKampusId)
+    .gte('ziyaret_tarihi', dününTarihi); // <-- İŞTE KVKK ANAYASASINI BURAYA YAPIŞTIRDIK
 
     if (aktifFiltre === "bugun") {
       query = query.eq("ziyaret_tarihi", bugunTarihi);
@@ -134,7 +148,30 @@ export default function GuvenlikPanel() {
     }
 
     const { data, error } = await query;
-    if (!error) setZiyaretciler(data || []);
+    if (data) {
+      // --- SİHİRLİ AF SİSTEMİ ---
+      const akilliListe = data.map((kisi) => {
+          // Sadece Reddedilmiş, Damgası olan ve VIP Bitiş Tarihi olanlara bak
+          if (kisi.durum === 'reddedildi' && kisi.son_islem_tarihi && kisi.bitis_tarihi) {
+              const islemGunu = new Date(kisi.son_islem_tarihi);
+              islemGunu.setHours(0, 0, 0, 0); // Reddedildiği gece yarısı
+
+              const bugun = new Date();
+              bugun.setHours(0, 0, 0, 0); // Bugün gece yarısı
+              
+              const bitisGunu = new Date(kisi.bitis_tarihi);
+              bitisGunu.setHours(0, 0, 0, 0); // İzninin bittiği gece yarısı
+
+              // Eğer DÜN (veya daha önce) reddedildiyse VE VIP izni hala bitmediyse
+              if (islemGunu < bugun && bitisGunu >= bugun) {
+                  return { ...kisi, durum: 'onaylandi' }; // ADAMI AFFET VE BEKLİYOR YAP!
+              }
+          }
+          return kisi;
+      });
+      
+      setZiyaretciler(akilliListe); // Akıllı listeyi ekrana bas
+  }
     setYukleniyor(false);
   };
 
@@ -153,30 +190,92 @@ export default function GuvenlikPanel() {
   const durumGuncelle = async (id: number, yeniDurum: string, n: string = "", e?: any) => {
     if(e) e.stopPropagation();
     
-    const payload: any = { 
-      durum: yeniDurum,
-      islem_yapan_guvenlik: personelAdi 
-    };
-    if (yeniDurum === 'reddedildi') payload.red_nedeni = n;
+ // 1. ADIM: AKILLI ÇIKIŞ KONTROLÜ (Zaman Yolcusu Versiyonu)
+ let veritabaninaYazilacakDurum = yeniDurum;
+  
+ // Adamı listeden ID ile KESİN olarak buluyoruz
+ const islemGoren = ziyaretciler.find((z) => z.id === id);
 
-    const { error } = await supabase.from("talepler").update(payload).eq("id", id);
-    
-    if (!error) {
-      // 1. Kendi ekranındaki listeyi günceller
-      setZiyaretciler((liste) => liste.map((k) => k.id === id ? { ...k, durum: yeniDurum, red_nedeni: n, islem_yapan_guvenlik: personelAdi } : k));
+ if (yeniDurum === 'cikis_yapti' && islemGoren && islemGoren.bitis_tarihi) {
+     // Tarihleri saat farkından etkilenmesin diye gece 00:00:00'a sabitliyoruz
+     const bitis = new Date(islemGoren.bitis_tarihi);
+     bitis.setHours(0, 0, 0, 0);
+     
+     const bugun = new Date();
+     bugun.setHours(0, 0, 0, 0);
 
-      // --- İŞTE SENİN İSTEDİĞİN O SİHİRLİ DOKUNUŞ BURASI ---
-      if (yeniDurum === 'reddedildi') {
-        // --- İŞTE SİHİRLİ DOKUNUŞ BURASI ---
-      if (yeniDurum === 'reddedildi') {
-        setShowRedModal(false); 
-        setSecilenZiyaretci(null); 
-        setShowSuccessModal(true); // ŞIK PENCEREYİ AÇAR
-      }
-       
-      }
-      // -----------------------------------------------------
-    }
+     if (bitis >= bugun) {
+         // Adamın süresi devam ediyor! Çıkış yapsa bile biletini öldürme, Bekliyor'a çek.
+         veritabaninaYazilacakDurum = 'onaylandi'; 
+     }
+ }
+ if (veritabaninaYazilacakDurum === 'cikis_yapti' && islemGoren && islemGoren.bitis_tarihi) {
+   const bitisTarihi = new Date(islemGoren.bitis_tarihi);
+   const bugun = new Date();
+   bitisTarihi.setHours(0, 0, 0, 0);
+   bugun.setHours(0, 0, 0, 0);
+
+   // Eğer bitiş tarihi bugünden büyükse, bileti ÖLDÜRME!
+   if (bitisTarihi > bugun) {
+     veritabaninaYazilacakDurum = 'onaylandi'; 
+   }
+ }
+
+ // 2. ADIM: VERİTABANINA GİDECEK PAKETİ (PAYLOAD) HAZIRLA
+ const payload: any = {
+   durum: veritabaninaYazilacakDurum, // <-- Yeni akıllı durumu buraya koyduk
+   islem_yapan_guvenlik: personelAdi
+ };
+ if (yeniDurum === 'reddedildi') payload.red_nedeni = n;
+
+ // HER İŞLEMDE ZAMAN DAMGASINI VURUYORUZ (Yarın sabahki af sistemi için)
+payload.son_islem_tarihi = new Date().toISOString();
+
+ // 3. ADIM: ANA BİLETİ GÜNCELLE
+ const { error } = await supabase.from("talepler").update(payload).eq("id", id);
+ 
+ // EĞER GÜNCELLEME BAŞARILIYSA, SABIKA DEFTERİNE (LOG TABLOSUNA) YAZ!
+ if (!error && islemGoren) {
+  await supabase.from('ziyaretci_loglari').insert([{
+      talep_id: id,
+      ziyaretci_tc: islemGoren.ziyaretci_tc,
+      ziyaretci_ad_soyad: islemGoren.ziyaretci_ad_soyad,
+      islem_tipi: yeniDurum, // 'reddedildi', 'iceride', 'cikis_yapti' vs.
+      islem_detayi: yeniDurum === 'reddedildi' ? n : "" // Varsa red nedenini yaz
+  }]);
+}
+
+ // 4. ADIM: KARA KUTUYA YAZ VE EKRANI GÜNCELLE
+ if (!error) {
+   // Çaktırmadan log defterine (Kara Kutuya) yazıyoruz
+   await supabase.from('ziyaret_loglari').insert({
+
+     talep_id: id,
+     islem_tipi: yeniDurum === 'iceride' ? 'GİRİŞ' : (yeniDurum === 'cikis_yapti' ? 'ÇIKIŞ' : yeniDurum.toUpperCase()),
+     islem_yapan_personel: personelAdi
+   });
+
+   // Güvenliğin ekranındaki listeyi arka planda güncelle
+   setZiyaretciler((prev) =>
+     prev.map((z) => (z.id === id ? { ...z, durum: veritabaninaYazilacakDurum } : z))
+   );
+   // TV'Yİ KAPATAN SİHİRLİ KUMANDA
+   setShowRedModal(false); // Reddetme penceresini kapat
+   setSecilenZiyaretci(null); // Hafızadaki adamı sil
+   setRedNedeni(""); // İçine yazılan "olumsuz" yazısını temizle
+
+   // İçeri alındıysa yeşil ekranı aç, yoksa sadece kapat ve yenile
+   if (yeniDurum === 'iceride') {
+     setSecilenZiyaretci(null); 
+     setShowGirisSuccessModal(true); 
+   } else {
+     setSecilenZiyaretci(null);
+     verileriGetir(); 
+   }
+ } else {
+   console.error("Durum güncellenirken hata oluştu:", error);
+   alert("İşlem sırasında bir hata oluştu.");
+ }
   };
 
   // YENİ: SEÇİLENLERİ TOPLU ÇIKIŞ YAP
@@ -482,7 +581,16 @@ window.location.reload();
                 </td>
                 
                 <td className="p-3">
-                  <div className="font-black text-slate-800 text-base">{kisi.ziyaretci_ad_soyad}</div>
+                <div className="font-bold text-slate-800 flex items-center gap-2">
+    <span>{kisi.ziyaretci_ad_soyad}</span>
+    
+    {/* DİNAMİK ABONMAN ROZETİ (Sadece bitiş tarihi olan VIP'lerde çıkar) */}
+    {kisi.bitis_tarihi && new Date(kisi.bitis_tarihi).setHours(0,0,0,0) > new Date().setHours(0,0,0,0) && (
+        <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded border border-blue-200 uppercase tracking-wider font-bold">
+            📅 {new Date(kisi.bitis_tarihi).toLocaleDateString('tr-TR')} 'E KADAR
+        </span>
+    )}
+</div>
                   <div className="text-xs text-slate-500 font-mono flex gap-2">
                       <span>TC: {maskeleTC(kisi.ziyaretci_tc)}</span>
                       {kisi.firma_bilgisi && <span className="text-blue-500 font-bold">• {kisi.firma_bilgisi}</span>}
@@ -569,7 +677,7 @@ window.location.reload();
                  
                  <div className="mt-4 pt-4 border-t border-slate-100">
                     <div className="flex items-center gap-1 text-xs text-slate-500 mb-1"><Phone size={12}/> GSM</div>
-                    <div className="font-bold text-slate-800">{secilenZiyaretci.ziyaretci_gsm || "-"}</div>
+                    <div className="font-bold text-slate-800 text-sm font-mono tracking-widest">{maskeleTelefon(secilenZiyaretci.ziyaretci_gsm)}</div>
                  </div>
                </div>
 
@@ -638,7 +746,26 @@ window.location.reload();
            </div>
         </div>
       )}
-
+{/* İÇERİ ALMA BAŞARILI MODALI */}
+{showGirisSuccessModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+           <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6 text-center animate-in zoom-in-95">
+              <div className="bg-emerald-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-600">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+              </div>
+              <h3 className="font-black text-slate-800 text-xl mb-2">İşlem Başarılı!</h3>
+              <p className="text-sm text-slate-500 mb-6 font-medium">Ziyaretçi başarıyla içeri alındı ve giriş saati kaydedildi.</p>
+              <button 
+                onClick={() => {
+                  setShowGirisSuccessModal(false);
+                  window.location.reload(); // İstersen sadece verileriGetir() de çağırabilirsin
+                }} 
+                className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-md">
+                Tamam
+              </button>
+           </div>
+        </div>
+      )}
     </main>
   );
 }

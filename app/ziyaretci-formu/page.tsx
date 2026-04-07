@@ -116,7 +116,8 @@ export default function ZiyaretciForm() {
             ziyaret_saati: formData.saat,
             plaka: formData.plaka,
             firma_bilgisi: isFirmaRequired ? formData.firma : "",
-            durum: "onaylandi"
+            durum: "onaylandi",
+            bitis_tarihi: formData.bitisTarihi || null,
         },
         ...extraVisitors.map(p => ({
             ziyaretci_ad_soyad: p.adSoyad,
@@ -129,7 +130,8 @@ export default function ZiyaretciForm() {
             ziyaret_saati: formData.saat,
             plaka: formData.plaka,
             firma_bilgisi: isFirmaRequired ? formData.firma : "",
-            durum: "onaylandi"
+            durum: "onaylandi",
+            bitis_tarihi: formData.bitisTarihi || null,
         }))
     ];
 
