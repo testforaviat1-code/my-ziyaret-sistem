@@ -7,7 +7,7 @@ import {
   CreditCard, ShieldAlert
 } from "lucide-react";
 
-export default function GuvenlikGiris() {
+export default function Login() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

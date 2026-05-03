@@ -152,7 +152,7 @@ export default function GuvenlikPanel() {
       // --- SİHİRLİ AF SİSTEMİ ---
       const akilliListe = data.map((kisi) => {
           // Sadece Reddedilmiş, Damgası olan ve VIP Bitiş Tarihi olanlara bak
-          if (kisi.durum === 'reddedildi' && kisi.son_islem_tarihi && kisi.bitis_tarihi) {
+          if ((kisi.durum === 'reddedildi' || kisi.durum === 'cikis_yapti') && kisi.son_islem_tarihi && kisi.bitis_tarihi) {
               const islemGunu = new Date(kisi.son_islem_tarihi);
               islemGunu.setHours(0, 0, 0, 0); // Reddedildiği gece yarısı
 
@@ -190,71 +190,18 @@ export default function GuvenlikPanel() {
   const durumGuncelle = async (id: number, yeniDurum: string, n: string = "", e?: any) => {
     if(e) e.stopPropagation();
     
- // 1. ADIM: AKILLI ÇIKIŞ KONTROLÜ (Zaman Yolcusu Versiyonu)
- let veritabaninaYazilacakDurum = yeniDurum;
-  
- // Adamı listeden ID ile KESİN olarak buluyoruz
- const islemGoren = ziyaretciler.find((z) => z.id === id);
+const veritabaninaYazilacakDurum = yeniDurum;
 
- if (yeniDurum === 'cikis_yapti' && islemGoren && islemGoren.bitis_tarihi) {
-     // Tarihleri saat farkından etkilenmesin diye gece 00:00:00'a sabitliyoruz
-     const bitis = new Date(islemGoren.bitis_tarihi);
-     bitis.setHours(0, 0, 0, 0);
-     
-     const bugun = new Date();
-     bugun.setHours(0, 0, 0, 0);
-
-     if (bitis >= bugun) {
-         // Adamın süresi devam ediyor! Çıkış yapsa bile biletini öldürme, Bekliyor'a çek.
-         veritabaninaYazilacakDurum = 'onaylandi'; 
-     }
- }
- if (veritabaninaYazilacakDurum === 'cikis_yapti' && islemGoren && islemGoren.bitis_tarihi) {
-   const bitisTarihi = new Date(islemGoren.bitis_tarihi);
-   const bugun = new Date();
-   bitisTarihi.setHours(0, 0, 0, 0);
-   bugun.setHours(0, 0, 0, 0);
-
-   // Eğer bitiş tarihi bugünden büyükse, bileti ÖLDÜRME!
-   if (bitisTarihi > bugun) {
-     veritabaninaYazilacakDurum = 'onaylandi'; 
-   }
- }
-
- // 2. ADIM: VERİTABANINA GİDECEK PAKETİ (PAYLOAD) HAZIRLA
- const payload: any = {
-   durum: veritabaninaYazilacakDurum, // <-- Yeni akıllı durumu buraya koyduk
-   islem_yapan_guvenlik: personelAdi
- };
- if (yeniDurum === 'reddedildi') payload.red_nedeni = n;
-
- // HER İŞLEMDE ZAMAN DAMGASINI VURUYORUZ (Yarın sabahki af sistemi için)
-payload.son_islem_tarihi = new Date().toISOString();
-
- // 3. ADIM: ANA BİLETİ GÜNCELLE
- const { error } = await supabase.from("talepler").update(payload).eq("id", id);
- 
- // EĞER GÜNCELLEME BAŞARILIYSA, SABIKA DEFTERİNE (LOG TABLOSUNA) YAZ!
- if (!error && islemGoren) {
-  await supabase.from('ziyaretci_loglari').insert([{
-      talep_id: id,
-      ziyaretci_tc: islemGoren.ziyaretci_tc,
-      ziyaretci_ad_soyad: islemGoren.ziyaretci_ad_soyad,
-      islem_tipi: yeniDurum, // 'reddedildi', 'iceride', 'cikis_yapti' vs.
-      islem_detayi: yeniDurum === 'reddedildi' ? n : "" // Varsa red nedenini yaz
-  }]);
+// KRİTİK: Doğrudan client update kaldırıldı, server action üzerinden yetki kontrollü işlem yapılıyor.
+let error: Error | null = null;
+try {
+  await guvenlikIslemi(id, yeniDurum, n);
+} catch (err: any) {
+  error = err;
 }
 
- // 4. ADIM: KARA KUTUYA YAZ VE EKRANI GÜNCELLE
+ // 4. ADIM: EKRANI GÜNCELLE (kara kutu + ziyaretçi logu sunucuda guvenlikIslemi içinde)
  if (!error) {
-   // Çaktırmadan log defterine (Kara Kutuya) yazıyoruz
-   await supabase.from('ziyaret_loglari').insert({
-
-     talep_id: id,
-     islem_tipi: yeniDurum === 'iceride' ? 'GİRİŞ' : (yeniDurum === 'cikis_yapti' ? 'ÇIKIŞ' : yeniDurum.toUpperCase()),
-     islem_yapan_personel: personelAdi
-   });
-
    // Güvenliğin ekranındaki listeyi arka planda güncelle
    setZiyaretciler((prev) =>
      prev.map((z) => (z.id === id ? { ...z, durum: veritabaninaYazilacakDurum } : z))
@@ -274,7 +221,7 @@ payload.son_islem_tarihi = new Date().toISOString();
    }
  } else {
    console.error("Durum güncellenirken hata oluştu:", error);
-   alert("İşlem sırasında bir hata oluştu.");
+   alert(error.message || "İşlem sırasında bir hata oluştu.");
  }
   };
 

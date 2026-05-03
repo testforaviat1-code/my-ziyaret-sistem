@@ -21,36 +21,21 @@ export default function Taleplerim() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
 
-      // 1. ADIM: Personelin kendi profil bilgilerini alıyoruz
+      // Frontend'e sadece oturum açmış personelin taleplerini indir.
       const { data: profil } = await supabase
         .from('profiller')
-        .select('tam_ad, id')
+        .select('sicil_no')
         .eq('id', user.id)
         .single();
-
-      // 2. ADIM: Eşleşme için kullanacağımız anahtarları belirliyoruz
-      const sicilNo = (user.email?.split('@')[0] || "").trim().toLowerCase();
-      const personelTamAd = (profil?.tam_ad || "").trim().toLowerCase();
-
-      // 3. ADIM: Tüm talepleri çekip "Zırhlı Filtreleme" yapıyoruz
+      const sicilNo = (profil?.sicil_no || user.email?.split('@')[0] || "").trim();
       const { data, error } = await supabase
         .from('talepler')
         .select('*, kampusler(isim)')
+        .eq('ziyaret_edilecek_kisi', sicilNo)
         .order('id', { ascending: false });
 
       if (!error && data) {
-        const banaAitTalepler = data.filter(talep => {
-          const personel  = (talep.ziyaret_edilecek_kisi || "").toLowerCase().trim();
-          
-          // EŞLEŞME KONTROLÜ: Veritabanındaki "personel" alanı; 
-          // sicilinle, tam adınla veya mailinle tutuyor mu?
-          return (
-            personel === sicilNo || 
-            personel === personelTamAd || 
-            (personel.length > 3 && (personelTamAd.includes(personel) || sicilNo.includes(personel)))
-          );
-        });
-        setTalepler(banaAitTalepler);
+        setTalepler(data);
       }
       setLoading(false);
     }
@@ -100,13 +85,26 @@ export default function Taleplerim() {
             ) : (
                goruntulenecekTalepler.map((talep) => (
                   <div key={talep.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 hover:shadow-md transition-shadow relative overflow-hidden group">
-                     <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${talep.durum === 'iceride' ? 'bg-emerald-500' : talep.durum === 'reddedildi' ? 'bg-red-500' : 'bg-orange-400'}`}></div>
-                     <div className="flex-1 pl-4 w-full">
-                        <div className="flex justify-between items-center mb-2">
-                           <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">{talep.ziyaretci_ad_soyad}</h3>
-                           <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase border ${talep.durum === 'iceride' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : talep.durum === 'reddedildi' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-slate-100'}`}>
-                              {talep.durum === 'iceride' ? 'İçeride' : talep.durum === 'reddedildi' ? 'Reddedildi' : 'Bekliyor'}
-                           </span>
+                     <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${
+    talep.durum === 'iceride' ? 'bg-emerald-500' : 
+    talep.durum === 'reddedildi' ? 'bg-red-500' : 
+    talep.durum === 'cikis_yapti' ? 'bg-gray-400' : 
+    'bg-orange-400'
+}`}></div>
+<div className="flex-1 pl-4 w-full">
+    <div className="flex justify-between items-center mb-2">
+        <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">{talep.ziyaretci_ad_soyad}</h3>
+        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase border ${
+            talep.durum === 'iceride' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 
+            talep.durum === 'reddedildi' ? 'bg-red-50 text-red-600 border-red-200' : 
+            talep.durum === 'cikis_yapti' ? 'bg-gray-100 text-gray-500 border-gray-200' : 
+            'bg-orange-50 text-orange-600 border-orange-200'
+        }`}>
+            {talep.durum === 'iceride' ? 'İÇERİDE' : 
+             talep.durum === 'reddedildi' ? 'REDDEDİLDİ' : 
+             talep.durum === 'cikis_yapti' ? 'ÇIKIŞ YAPTI' : 
+             'BEKLENİYOR'}
+        </span>
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-5 font-bold text-sm">
                            <div><p className="text-[10px] text-slate-400 uppercase mb-1">Tarih</p>{formatTarih(talep.ziyaret_tarihi)} - {talep.ziyaret_saati}</div>

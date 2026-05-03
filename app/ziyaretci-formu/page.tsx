@@ -1,6 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { gecmisZamaniEngelle } from "../../lib/supabase/zamanKontrol";
+import { yeniZiyaretciKaydet } from "../actions/ziyaretci";
 import Link from "next/link"; // YENİ EKLENDİ
 import { 
   User, Briefcase, Calendar, Clock, 
@@ -8,7 +10,7 @@ import {
   CheckCircle, CloudSun, UserPlus, X, ShieldCheck, Trash2 
 } from "lucide-react";
 
-export default function ZiyaretciForm() {
+export default function ZiyaretciForm() { 
   const supabase = createClient();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -95,7 +97,13 @@ export default function ZiyaretciForm() {
     if (!formData.kvkk) { alert("Lütfen KVKK metnini onaylayınız."); return; }
     if (formData.tc.length !== 11) { alert("Ana ziyaretçi TC Kimlik No 11 hane olmalıdır."); return; }
     if (formData.gsm.length !== 11) { alert("GSM numarası 11 hane olmalıdır."); return; }
-    
+    // --- ZAMAN MAKİNESİ ENGELİ ---
+  const zamanDurumu = gecmisZamaniEngelle(formData.tarih, formData.saat);
+  if (!zamanDurumu.izinVer) {
+    alert(zamanDurumu.mesaj);
+    return; // Kodu durdur, aşağı inip veritabanına kaydetme!
+  }
+  // -----------------------------
     const isFirmaRequired = formData.tip === 'destek' || (formData.tip === 'ziyaret' && formData.altTip === 'firma');
     if (isFirmaRequired && !formData.firma) { alert("Firma bilgisi zorunludur."); return; }
 
@@ -135,17 +143,21 @@ export default function ZiyaretciForm() {
         }))
     ];
 
-    const { error } = await supabase.from("talepler").insert(tumZiyaretciler);
+   // --- YENİ GÜVENLİ SUNUCU KAYDI ---
+  const sonuc = await yeniZiyaretciKaydet(tumZiyaretciler, formData.tarih, formData.saat);
 
-    setLoading(false);
-    if (error) {
-      alert("Hata: " + error.message);
-    } else {
-      setSuccess(true);
-    }
-  };
+  setLoading(false);
+  
+  if (!sonuc.basarili) {
+    alert("Hata: " + sonuc.mesaj);
+  } else {
+    setSuccess(true);
+  }
+  // ---------------------------------
+};
 
   // --- BAŞARI EKRANI (GÜNCELLENDİ: YENİ BUTONLAR EKLENDİ) ---
+
   if (success) {
     return (
       <div className="min-h-screen flex items-center justify-center relative overflow-hidden font-sans p-4">
