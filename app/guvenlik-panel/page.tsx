@@ -128,15 +128,18 @@ export default function GuvenlikPanel() {
     if (!hedefKampusId) return; 
 
     setYukleniyor(true);
-    setSeciliZiyaretciler([]); // Filtre değişince seçimleri sıfırla
+    setSeciliZiyaretciler([]);
 
-  
+    // 1. Günün başlangıcını al (Bugün saat 00:00:00)
+    const bugunBaslangici = new Date();
+    bugunBaslangici.setHours(0, 0, 0, 0);
+
+    // 2. MİMARİ SORGUMUZ: İçeridekileri ve Bekleyenleri koru, Çıkış yapanları gece 00:00'da sil!
     let query = supabase
     .from("talepler")
     .select("*, bitis_tarihi, kampusler(isim)")
     .eq('kampus_id', hedefKampusId)
-    .or(`ziyaret_tarihi.gte.${dününTarihi},bitis_tarihi.gte.${bugunTarihi}`); 
-    // KVKK 24 Saat Kuralı VE Aktif VIP'leri getirme kuralı birleşti!
+    .or(`durum.in.(bekleniyor,iceride),and(durum.in.(cikis_yapti,reddedildi),son_islem_tarihi.gte.${bugunBaslangici.toISOString()})`);
 
     if (aktifFiltre === "bugun") {
       query = query.eq("ziyaret_tarihi", bugunTarihi);
