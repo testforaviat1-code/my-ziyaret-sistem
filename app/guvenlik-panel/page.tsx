@@ -43,7 +43,7 @@ export default function GuvenlikPanel() {
   const [adminSecilenKampusId, setAdminSecilenKampusId] = useState<number | null>(null);
 
   // Filtreler
-  const [aktifFiltre, setAktifFiltre] = useState<"bugun" | "gelecek" | "gecmis" | "tumu">("bugun");
+  const [aktifFiltre, setAktifFiltre] = useState<"bugun" | "gelecek" | "tumu">("bugun");
   const [durumFiltresi, setDurumFiltresi] = useState<string>("hepsi");
 
   // Hydration Fix
@@ -146,8 +146,8 @@ let query = supabase
       query = query.eq("ziyaret_tarihi", bugunTarihi);
     } else if (aktifFiltre === "gelecek") {
       query = query.gt("ziyaret_tarihi", bugunTarihi);
-    } else if (aktifFiltre === "gecmis") {
-      query = query.lt("ziyaret_tarihi", bugunTarihi);
+    
+    
     } else if (aktifFiltre === "tumu") {
       query = query.limit(500);
     }
@@ -423,9 +423,10 @@ window.location.reload();
       <div className="bg-white rounded-xl shadow p-4 overflow-x-auto min-h-[500px]">
         <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
             <div className="flex bg-slate-100 p-1 rounded-lg w-full md:w-auto overflow-x-auto">
+              
                 <button onClick={() => setAktifFiltre("bugun")} className={`flex-1 md:flex-none px-4 py-2 rounded-md text-xs font-bold transition-all whitespace-nowrap ${aktifFiltre === 'bugun' ? 'bg-white text-emerald-600 shadow' : 'text-slate-400 hover:text-slate-600'}`}>BUGÜN</button>
                 <button onClick={() => setAktifFiltre("gelecek")} className={`flex-1 md:flex-none px-4 py-2 rounded-md text-xs font-bold transition-all whitespace-nowrap ${aktifFiltre === 'gelecek' ? 'bg-white text-blue-600 shadow' : 'text-slate-400 hover:text-slate-600'}`}>GELECEK</button>
-                <button onClick={() => setAktifFiltre("gecmis")} className={`flex-1 md:flex-none px-4 py-2 rounded-md text-xs font-bold transition-all whitespace-nowrap ${aktifFiltre === 'gecmis' ? 'bg-white text-gray-600 shadow' : 'text-slate-400 hover:text-slate-600'}`}>GEÇMİŞ</button>
+                
                 <button onClick={() => setAktifFiltre("tumu")} className={`flex-1 md:flex-none px-4 py-2 rounded-md text-xs font-bold transition-all whitespace-nowrap ${aktifFiltre === 'tumu' ? 'bg-white text-purple-600 shadow' : 'text-slate-400 hover:text-slate-600'}`}>TÜMÜ</button>
             </div>
             
