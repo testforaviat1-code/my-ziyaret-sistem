@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { personelKampusGuncelle } from "@/app/actions/admin";
 import { useRouter } from "next/navigation";
 import { 
   LogOut, LayoutGrid, Users, Building2, 
@@ -122,35 +123,24 @@ export default function IdariPanel() {
     if (data) setGuvenlikPersoneli(data);
   };
 
-  const kampusGuncelle = async (personelId: string, yeniKampusId: string) => {
-    setIslemYapiliyor(personelId);
-    const targetKampusId = yeniKampusId === "" ? null : Number(yeniKampusId);
-    
-    // 1. Veritabanını güncelle
-    const { error } = await supabase.from('profiller').update({ kampus_id: targetKampusId }).eq('id', personelId);
-    
-    if (error) {
-      alert("Atama sırasında hata oluştu: " + error.message);
-    } else {
-      // 2. Bekleme yapmadan anında ekrandaki veriyi (State) güncelle
-      setGuvenlikPersoneli((eskiListe) => 
-        eskiListe.map(personel => {
-          if (personel.id === personelId) {
-            const yeniKampus = kampusler.find(k => k.id === targetKampusId);
-            return { 
-              ...personel, 
-              kampus_id: targetKampusId, 
-              kampusler: yeniKampus ? { isim: yeniKampus.isim } : null 
-            };
-          }
-          return personel;
-        })
-      );
-      
-      // 3. Şık bir başarı mesajı
-      alert("Personelin yeni görev yeri başarıyla güncellendi!");
+  const kampusGuncelle = async (personelId: string, yeniKampusId: string | null) => {
+    try {
+      // 1. Kuryeyi (Server Action) arka planda gönder ve cevabını bekle
+      const sonuc = await personelKampusGuncelle(personelId, yeniKampusId);
+  
+      if (sonuc.basarili) {
+        // 2. İŞLEM GERÇEKTEN BAŞARILIYSA EKRANI GÜNCELLE (Yalan yok!)
+        setGuvenlikPersoneli((prev) =>
+          prev.map((p) => (p.id === personelId ? { ...p, kampus_id: yeniKampusId } : p))
+        );
+        alert(sonuc.mesaj); // Toast mesajı kullanıyorsan toast.success(sonuc.mesaj) yapabilirsin.
+      } else {
+        // 3. İŞLEM BAŞARISIZSA EKRANA DOKUNMA, HATA FIRLAT!
+        alert("HATA: " + sonuc.mesaj); // Toast mesajı kullanıyorsan toast.error yapabilirsin.
+      }
+    } catch (error) {
+      alert("Sunucuyla iletişim kurulurken beklenmeyen bir hata oluştu.");
     }
-    setIslemYapiliyor(null);
   };
 
   // YANLIŞLIKLA SİLİNEN KISIM (GERİ GELDİ)
