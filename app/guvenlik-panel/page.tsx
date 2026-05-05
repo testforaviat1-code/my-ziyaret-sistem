@@ -139,7 +139,7 @@ export default function GuvenlikPanel() {
     .from("talepler")
     .select("*, bitis_tarihi, kampusler(isim)")
     .eq('kampus_id', hedefKampusId)
-    .or(`durum.in.(bekleniyor,iceride),and(durum.in.(cikis_yapti,reddedildi),son_islem_tarihi.gte.${bugunBaslangici.toISOString()})`);
+    .or(`durum.in.(onaylandi,iceride),and(durum.in.(cikis_yapti,reddedildi),son_islem_tarihi.gte.${bugunBaslangici.toISOString()})`);
 
     if (aktifFiltre === "bugun") {
       query = query.eq("ziyaret_tarihi", bugunTarihi);
