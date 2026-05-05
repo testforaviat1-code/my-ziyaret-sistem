@@ -613,7 +613,7 @@ export default function IdariPanel() {
                                onChange={(e) => kampusGuncelle(personel.id, e.target.value)}
                                className="w-48 bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold rounded-lg px-3 py-2.5 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer disabled:opacity-50 uppercase"
                              >
-                               <option value="">GÖREVDEN AL (BOŞA ÇEK)</option>
+                              
                                {kampusler.map(k => (
                                  <option key={k.id} value={k.id}>{k.isim}</option>
                                ))}

@@ -135,7 +135,8 @@ export default function GuvenlikPanel() {
     .from("talepler")
     .select("*, bitis_tarihi, kampusler(isim)")
     .eq('kampus_id', hedefKampusId)
-    .gte('ziyaret_tarihi', dününTarihi); // <-- İŞTE KVKK ANAYASASINI BURAYA YAPIŞTIRDIK
+    .or(`ziyaret_tarihi.gte.${dününTarihi},bitis_tarihi.gte.${bugunTarihi}`); 
+    // KVKK 24 Saat Kuralı VE Aktif VIP'leri getirme kuralı birleşti!
 
     if (aktifFiltre === "bugun") {
       query = query.eq("ziyaret_tarihi", bugunTarihi);
@@ -149,29 +150,8 @@ export default function GuvenlikPanel() {
 
     const { data, error } = await query;
     if (data) {
-      // --- SİHİRLİ AF SİSTEMİ ---
-      const akilliListe = data.map((kisi) => {
-          // Sadece Reddedilmiş, Damgası olan ve VIP Bitiş Tarihi olanlara bak
-          if ((kisi.durum === 'reddedildi' || kisi.durum === 'cikis_yapti') && kisi.son_islem_tarihi && kisi.bitis_tarihi) {
-              const islemGunu = new Date(kisi.son_islem_tarihi);
-              islemGunu.setHours(0, 0, 0, 0); // Reddedildiği gece yarısı
-
-              const bugun = new Date();
-              bugun.setHours(0, 0, 0, 0); // Bugün gece yarısı
-              
-              const bitisGunu = new Date(kisi.bitis_tarihi);
-              bitisGunu.setHours(0, 0, 0, 0); // İzninin bittiği gece yarısı
-
-              // Eğer DÜN (veya daha önce) reddedildiyse VE VIP izni hala bitmediyse
-              if (islemGunu < bugun && bitisGunu >= bugun) {
-                  return { ...kisi, durum: 'onaylandi' }; // ADAMI AFFET VE BEKLİYOR YAP!
-              }
-          }
-          return kisi;
-      });
-      
-      setZiyaretciler(akilliListe); // Akıllı listeyi ekrana bas
-  }
+      setZiyaretciler(data); // Sahte maskeleri attık, veritabanından ne geliyorsa o!
+    }
     setYukleniyor(false);
   };
 
