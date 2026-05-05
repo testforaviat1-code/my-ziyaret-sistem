@@ -130,16 +130,17 @@ export default function GuvenlikPanel() {
     setYukleniyor(true);
     setSeciliZiyaretciler([]);
 
-    // 1. Günün başlangıcını al (Bugün saat 00:00:00)
+    // Gece 00:00 başlangıcını al
     const bugunBaslangici = new Date();
     bugunBaslangici.setHours(0, 0, 0, 0);
+    const bugunISO = bugunBaslangici.toISOString();
 
-    // 2. MİMARİ SORGUMUZ: İçeridekileri ve Bekleyenleri koru, Çıkış yapanları gece 00:00'da sil!
-    let query = supabase
-    .from("talepler")
-    .select("*, bitis_tarihi, kampusler(isim)")
-    .eq('kampus_id', hedefKampusId)
-    .or(`durum.in.(onaylandi,iceride),and(durum.in.(cikis_yapti,reddedildi),son_islem_tarihi.gte.${bugunBaslangici.toISOString()})`);
+// 2. 4 Altın Kuralın Kodlanmış Hali
+let query = supabase
+  .from("talepler")
+  .select("*, bitis_tarihi, kampusler(isim)")
+  .eq('kampus_id', hedefKampusId)
+  .or(`durum.eq.iceride,and(durum.in.(cikis_yapti,reddedildi),son_islem_tarihi.gte.${bugunISO}),and(durum.eq.onaylandi,ziyaret_tarihi.gte.${bugunISO}),and(durum.eq.onaylandi,bitis_tarihi.gte.${bugunISO})`);
 
     if (aktifFiltre === "bugun") {
       query = query.eq("ziyaret_tarihi", bugunTarihi);
