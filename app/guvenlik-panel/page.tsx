@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { getTRMidnightISO } from "@/lib/zaman";
 import { guvenlikIslemi, topluGuvenlikIslemi } from "@/app/actions/guvenlik";
 import { 
   
@@ -129,12 +130,10 @@ export default function GuvenlikPanel() {
 
     setYukleniyor(true);
     setSeciliZiyaretciler([]);
-
-    // Gece 00:00 başlangıcını al
-    const bugunBaslangici = new Date();
-    bugunBaslangici.setHours(0, 0, 0, 0);
-    const bugunISO = bugunBaslangici.toISOString();
-
+    
+    // Türkiye saatine sabitlenmiş Gece 00:00 başlangıcı
+    const bugunISO = getTRMidnightISO();
+  
 // 2. 4 Altın Kuralın Kodlanmış Hali
 let query = supabase
   .from("talepler")
@@ -142,9 +141,11 @@ let query = supabase
   .eq('kampus_id', hedefKampusId)
   .or(`durum.eq.iceride,and(durum.in.(cikis_yapti,reddedildi),son_islem_tarihi.gte.${bugunISO}),and(durum.eq.onaylandi,ziyaret_tarihi.gte.${bugunISO}),and(durum.eq.onaylandi,bitis_tarihi.gte.${bugunISO})`);
 
-    if (aktifFiltre === "bugun") {
-      query = query.eq("ziyaret_tarihi", bugunTarihi);
-    } else if (aktifFiltre === "gelecek") {
+  if (aktifFiltre === "bugun") {
+    // SADECE bugünü değil, dünden içeride kalanları da BUGÜN ekranında zorla göster!
+    query = query.or(`ziyaret_tarihi.eq.${bugunTarihi},durum.eq.iceride`);
+  }
+     else if (aktifFiltre === "gelecek") {
       query = query.gt("ziyaret_tarihi", bugunTarihi);
     
     
