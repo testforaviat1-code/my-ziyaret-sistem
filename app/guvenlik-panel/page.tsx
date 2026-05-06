@@ -340,7 +340,8 @@ window.location.reload();
 
   // YENİ: 17:00 UYARISI İÇİN MANTIK
   const mesaiBittiMi = zaman.getHours() >= 17;
-  const icerideKalanSayisi = ziyaretciler.filter(k => k.durum === 'iceride' && k.ziyaret_tarihi === bugunTarihi).length;
+  // Tarihi ne olursa olsun içerideki herkesi say!
+const icerideKalanSayisi = ziyaretciler.filter(k => k.durum === 'iceride').length;
 
   return (
     <main className="min-h-screen bg-slate-100 font-sans p-4 relative">
