@@ -451,7 +451,13 @@ export default function IdariPanel() {
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto bg-slate-50">
                <div className={`p-4 rounded-xl border flex items-center gap-3 ${secilenZiyaretci.durum === 'iceride' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : secilenZiyaretci.durum === 'reddedildi' ? 'bg-red-50 border-red-200 text-red-600' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
                   <Activity size={20} />
-                  <div><div className="text-xs font-bold uppercase opacity-70">Güncel Durum</div><div className="font-black text-sm uppercase">{secilenZiyaretci.durum}</div></div>
+                  <div><div className="text-xs font-bold uppercase opacity-70">Güncel Durum</div><div className="font-black text-sm uppercase">
+  {secilenZiyaretci.durum === 'onaylandi' ? 'BEKLİYOR' : 
+   secilenZiyaretci.durum === 'iceride' ? 'İÇERİDE' : 
+   secilenZiyaretci.durum === 'cikis_yapti' ? 'ÇIKIŞ YAPTI' : 
+   secilenZiyaretci.durum === 'reddedildi' ? 'REDDEDİLDİ' : 
+   secilenZiyaretci.durum.toUpperCase()}
+</div></div>
                </div>
                {secilenZiyaretci.durum !== 'onaylandi' && (
                  <div className={`p-3 rounded-xl border flex items-center gap-3 shadow-sm ${
