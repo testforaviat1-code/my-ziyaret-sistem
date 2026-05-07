@@ -37,11 +37,13 @@ export default function IdariPanel() {
     toplam: 0, iceride: 0, bekleyen: 0, cikan: 0, reddedilen: 0 
   });
 
-  const tarihNesnesi = new Date();
-  const yil = tarihNesnesi.getFullYear();
-  const ay = String(tarihNesnesi.getMonth() + 1).padStart(2, '0');
-  const gun = String(tarihNesnesi.getDate()).padStart(2, '0');
-  const bugunTarihi = `${yil}-${ay}-${gun}`;
+// PROFESYONEL ZAMAN MÜHRÜ (Türkiye Saati ile BUGÜN)
+const simdiTR = new Date().toLocaleString("en-US", { timeZone: "Europe/Istanbul" });
+const tarihNesnesi = new Date(simdiTR);
+const yil = tarihNesnesi.getFullYear();
+const ay = String(tarihNesnesi.getMonth() + 1).padStart(2, '0');
+const gun = String(tarihNesnesi.getDate()).padStart(2, '0');
+const bugunTarihi = `${yil}-${ay}-${gun}`;
 
   const maskeleTC = (tc: string) => (!tc || tc.length < 11) ? "***********" : `${tc.substring(0, 2)}*******${tc.substring(9, 11)}`;
 
