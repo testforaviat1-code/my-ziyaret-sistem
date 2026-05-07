@@ -142,8 +142,10 @@ let query = supabase
   .or(`durum.eq.iceride,and(durum.in.(cikis_yapti,reddedildi),son_islem_tarihi.gte.${bugunISO}),and(durum.eq.onaylandi,ziyaret_tarihi.gte.${bugunISO}),and(durum.eq.onaylandi,bitis_tarihi.gte.${bugunISO})`);
 
   if (aktifFiltre === "bugun") {
-    // SADECE bugünü değil, dünden içeride kalanları da BUGÜN ekranında zorla göster!
-    query = query.or(`ziyaret_tarihi.eq.${bugunTarihi},durum.eq.iceride`);
+    // 1. Ziyaret tarihi tam bugün olanlar VEYA
+    // 2. Dünden içeride kalıp çıkış yapmamış olanlar VEYA
+    // 3. VIP olup abonmanlık süresi (bitis_tarihi) bugünden büyük/eşit olanlar!
+    query = query.or(`ziyaret_tarihi.eq.${bugunTarihi},durum.eq.iceride,bitis_tarihi.gte.${bugunTarihi}`);
   }
      else if (aktifFiltre === "gelecek") {
       query = query.gt("ziyaret_tarihi", bugunTarihi);
