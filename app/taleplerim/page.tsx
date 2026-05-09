@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useSupabase } from "@/lib/supabase/hooks";
 import { useRouter } from "next/navigation";
+import { maskeleTC, formatTarih } from "@/lib/formatlayici";
 import Link from "next/link";
 import { 
   ArrowLeft, Calendar, Clock, MapPin, User, Briefcase, 
@@ -9,7 +10,7 @@ import {
 } from "lucide-react";
 
 export default function Taleplerim() {
-   const supabase = createClient();
+   const supabase = useSupabase();
   const router = useRouter();
   const [talepler, setTalepler] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,8 +43,6 @@ export default function Taleplerim() {
     verileriGetir();
   }, [router]);
 
-  const maskeleTC = (tc: string) => (!tc || tc.length < 11) ? "***********" : `${tc.substring(0, 2)}*******${tc.substring(9, 11)}`;
-  const formatTarih = (tarih: string) => (!tarih) ? "-" : tarih.split('-').reverse().join('.');
 
   const goruntulenecekTalepler = talepler.filter(talep => {
       const isAktif = talep.durum === 'onaylandi' || talep.durum === 'iceride';

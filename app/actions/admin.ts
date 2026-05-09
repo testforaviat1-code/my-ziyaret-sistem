@@ -34,6 +34,20 @@ export async function personelKampusGuncelle(personelId: string, yeniKampusId: s
       return { basarili: false, mesaj: "Güvenlik İhlali: Bu işlem için 'Admin' yetkiniz bulunmuyor!" };
     }
 
+// Güncellenecek kişi sadece "guvenlik" rolünde olmalı
+const { data: hedefProfil, error: hedefHata } = await supabase
+  .from("profiller")
+  .select("rol")
+  .eq("id", personelId)
+  .single();
+
+if (hedefHata || !hedefProfil) {
+  return { basarili: false, mesaj: "Personel bulunamadı." };
+}
+
+if (hedefProfil.rol !== "guvenlik") {
+  return { basarili: false, mesaj: "Sadece güvenlik personelinin kampüsü değiştirilebilir." };
+}
     // 3. ASIL İŞLEM VE FATURA KONTROLÜ
     // Güncellemeyi yap ve .select('id') ile dönen satırları geri iste!
     const { data: guncellenenVeri, error: updateError } = await supabase

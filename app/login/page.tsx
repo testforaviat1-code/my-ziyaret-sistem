@@ -1,6 +1,6 @@
 ﻿"use client";
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useSupabase } from "@/lib/supabase/hooks";
 import { useRouter } from "next/navigation";
 import { 
   Lock, ArrowRight, Eye, EyeOff, 
@@ -9,6 +9,7 @@ import {
 
 export default function Login() {
   const router = useRouter();
+  const supabase = useSupabase();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -19,8 +20,6 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-
-    const supabase = createClient();
 
     try {
       // 1. Sicil no sonuna otomatik @thy.com ekleme

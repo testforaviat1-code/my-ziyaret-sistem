@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useSupabase } from "@/lib/supabase/hooks";
 import { personelKampusGuncelle } from "@/app/actions/admin";
+import { maskeleTC } from "@/lib/formatlayici";
 import { useRouter } from "next/navigation";
 import { 
   LogOut, LayoutGrid, Users, Building2, 
@@ -13,7 +14,7 @@ import Link from "next/link";
 
 export default function IdariPanel() {
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useSupabase();
   
   const [loading, setLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -45,7 +46,7 @@ const ay = String(tarihNesnesi.getMonth() + 1).padStart(2, '0');
 const gun = String(tarihNesnesi.getDate()).padStart(2, '0');
 const bugunTarihi = `${yil}-${ay}-${gun}`;
 
-  const maskeleTC = (tc: string) => (!tc || tc.length < 11) ? "***********" : `${tc.substring(0, 2)}*******${tc.substring(9, 11)}`;
+
 
   useEffect(() => {
     async function baslat() {

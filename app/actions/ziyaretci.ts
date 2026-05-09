@@ -39,28 +39,28 @@ export async function yeniZiyaretciKaydet(ziyaretcilerArray: any[], tarih: strin
     return { basarili: false, mesaj: "Yetkisiz işlem: Bu formu doldurma yetkiniz yok." };
   }
 
-  if (profil.rol !== "admin" && (profil.kampus_id === null || profil.kampus_id === undefined)) {
-    return { basarili: false, mesaj: "Profilinize atanmış bir yerleşke yok; kayıt açılamıyor." };
-  }
+  
 
   // ziyaret_edilecek_kisi: DB ve taleplerim ekranı sicil (veya e-posta ön eki) ile eşleşiyor; frontend değerine güvenilmez.
-  const ziyaretEdilecekKisi = (profil.sicil_no || user.email?.split("@")[0] || "").trim();
-  if (!ziyaretEdilecekKisi) {
-    return { basarili: false, mesaj: "Profil kimlik bilgisi (sicil) eksik; kayıt yapılamıyor." };
+    
+    const ziyaretEdilecekKisi = (profil.sicil_no || user.email?.split("@")[0] || "").trim();
+    if (!ziyaretEdilecekKisi) {
+      return { basarili: false, mesaj: "Profil kimlik bilgisi (sicil) eksik; kayıt yapılamıyor." };
+    }
+  
+    const guvenliKayitlar = ziyaretcilerArray.map((kayit) => ({
+      ...kayit,
+      ziyaret_edilecek_kisi: ziyaretEdilecekKisi,
+      // Personel hangi kampüsü seçtiyse onu kullan, admin ise zaten geleni kullan
+      kampus_id: kayit.kampus_id || profil.kampus_id,
+    }));
+  
+    // 3. KAYIT İŞLEMİ (Senin tumZiyaretciler dizini buraya basıyoruz)
+    const { error } = await supabase.from("talepler").insert(guvenliKayitlar);
+  
+    if (error) {
+      return { basarili: false, mesaj: error.message };
+    }
+  
+    return { basarili: true, mesaj: "Kayıt başarıyla oluşturuldu!" }; 
   }
-
-  const guvenliKayitlar = ziyaretcilerArray.map((kayit) => ({
-    ...kayit,
-    ziyaret_edilecek_kisi: ziyaretEdilecekKisi,
-    kampus_id: profil.rol === "admin" ? kayit.kampus_id : profil.kampus_id,
-  }));
-
-  // 3. KAYIT İŞLEMİ (Senin tumZiyaretciler dizini buraya basıyoruz)
-  const { error } = await supabase.from("talepler").insert(guvenliKayitlar);
-
-  if (error) {
-    return { basarili: false, mesaj: error.message };
-  }
-
-  return { basarili: true, mesaj: "Kayıt başarıyla oluşturuldu!" };
-}

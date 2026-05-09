@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useSupabase } from "@/lib/supabase/hooks";
 import { gecmisZamaniEngelle } from "../../lib/supabase/zamanKontrol";
 import { yeniZiyaretciKaydet } from "../actions/ziyaretci";
 import Link from "next/link"; // YENİ EKLENDİ
@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 export default function ZiyaretciForm() { 
-  const supabase = createClient();
+  const supabase = useSupabase();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [showKvkk, setShowKvkk] = useState(false);

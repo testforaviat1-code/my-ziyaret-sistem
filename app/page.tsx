@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useSupabase } from "@/lib/supabase/hooks";
 import { useRouter } from "next/navigation"; 
 import Link from "next/link";
 import { 
@@ -12,6 +12,7 @@ import {
 
 export default function Home() {
   const router = useRouter();
+  const supabase = useSupabase();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -24,7 +25,6 @@ export default function Home() {
 
   useEffect(() => {
     async function kontrolEt() {
-      const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
@@ -48,7 +48,6 @@ export default function Home() {
   }, [router]);
 
   const cikisYap = async () => {
-    const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/login");
   };

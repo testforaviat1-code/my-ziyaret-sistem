@@ -4,8 +4,6 @@ import { NextResponse, type NextRequest } from 'next/server'
 const ROUTE_ROLES: Record<string, string[]> = {
   '/guvenlik-panel': ['guvenlik', 'admin'],
   '/idari-panel':    ['admin'],
-  '/talep':          ['personel', 'guvenlik', 'admin'],
-  '/dashboard':      ['personel', 'guvenlik', 'admin'],
   '/taleplerim':     ['personel', 'guvenlik', 'admin'],
   '/ziyaretci-formu': ['personel', 'guvenlik', 'admin'],
 }
@@ -59,8 +57,6 @@ export const config = {
     '/guvenlik-panel/:path*',
     '/idari-panel/:path*',
     '/taleplerim/:path*',
-    '/ziyaretci-formu/:path*',
-    '/talep/:path*',      // <-- AÇIK KAPI KAPATILDI
-    '/dashboard/:path*',  // <-- AÇIK KAPI KAPATILDI
+    '/ziyaretci-formu/:path*'
   ],
 }

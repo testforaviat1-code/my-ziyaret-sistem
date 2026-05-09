@@ -1,8 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useSupabase } from "@/lib/supabase/hooks";
 import { useRouter } from "next/navigation";
 import { getTRMidnightISO } from "@/lib/zaman";
+import { maskeleTC, formatTarih, maskeleTelefon } from "@/lib/formatlayici";
 import { guvenlikIslemi, topluGuvenlikIslemi } from "@/app/actions/guvenlik";
 import { 
   
@@ -12,7 +13,7 @@ import {
 import Link from "next/link";
 
 export default function GuvenlikPanel() {
-  const supabase = createClient();
+  const supabase = useSupabase();
   const router = useRouter();
   
   // --- STATE'LER ---
@@ -60,14 +61,7 @@ export default function GuvenlikPanel() {
   };
 
   const bugunTarihi = new Date().toISOString().split('T')[0];
-  const maskeleTC = (tc: string) => (!tc || tc.length < 11) ? "***********" : `${tc.substring(0, 2)}*******${tc.substring(9, 11)}`;
-  const formatTarih = (tarih: string) => (!tarih) ? "-" : tarih.split('-').reverse().join('.');
-  const maskeleTelefon = (tel: string) => {
-    if (!tel) return "-";
-    const temizTel = tel.replace(/\s/g, ""); // Varsa aradaki boşlukları siler
-    if (temizTel.length < 4) return temizTel; 
-    return `${temizTel.substring(0, 2)}*******${temizTel.substring(temizTel.length - 2)}`;
-  };
+
 
   // --- 1. MOUNT VE SAAT AYARI ---
   useEffect(() => {
@@ -117,12 +111,6 @@ export default function GuvenlikPanel() {
     }
     personelYetkisiGetir();
   }, [router]);
-
-  // --- 3. VERİLERİ GETİR ---
-  // KVKK: 24 Saat Kuralı için dünün tarihini hesapla
-  const dun = new Date();
-  dun.setDate(dun.getDate() - 1); // Bugünden 1 gün çıkar
-  const dününTarihi = dun.toISOString().split('T')[0]; // Örn: "2026-04-05"
 
   const verileriGetir = async () => {
     const hedefKampusId = isAdmin ? adminSecilenKampusId : (personelKampus ? personelKampus.id : null);
@@ -223,11 +211,10 @@ try {
     const islemListesi = [...seciliZiyaretciler];
     setSeciliZiyaretciler([]); 
 
+    // çelik kasaya gönder
     try {
-      // Çelik kasaya gönder
       await topluGuvenlikIslemi(islemListesi);
-      
-window.location.reload();
+      verileriGetir(); // sunucudan güncel listeyi al
     } catch (error: any) {
       alert("Hata: " + error.message);
       verileriGetir();
@@ -675,7 +662,10 @@ const icerideKalanSayisi = ziyaretciler.filter(k => k.durum === 'iceride').lengt
               <h3 className="font-black text-slate-800 text-xl mb-2">İşlem Başarılı!</h3>
               <p className="text-sm text-slate-500 mb-6 font-medium">Ziyaretçi girişi başarıyla reddedildi.</p>
               <button 
-                onClick={() => window.location.reload()} 
+                onClick={() => {
+                  setShowSuccessModal(false);
+                  verileriGetir();
+                }}
                 className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-md">
                 Tamam
               </button>
@@ -684,23 +674,23 @@ const icerideKalanSayisi = ziyaretciler.filter(k => k.durum === 'iceride').lengt
       )}
 {/* İÇERİ ALMA BAŞARILI MODALI */}
 {showGirisSuccessModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
-           <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6 text-center animate-in zoom-in-95">
-              <div className="bg-emerald-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-600">
-                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-              </div>
-              <h3 className="font-black text-slate-800 text-xl mb-2">İşlem Başarılı!</h3>
-              <p className="text-sm text-slate-500 mb-6 font-medium">Ziyaretçi başarıyla içeri alındı ve giriş saati kaydedildi.</p>
-              <button 
-                onClick={() => {
-                  setShowGirisSuccessModal(false);
-                  window.location.reload(); // İstersen sadece verileriGetir() de çağırabilirsin
-                }} 
-                className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-md">
-                Tamam
-              </button>
-           </div>
+  <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+     <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6 text-center animate-in zoom-in-95">
+        <div className="bg-emerald-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-600">
+           <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
         </div>
+        <h3 className="font-black text-slate-800 text-xl mb-2">İşlem Başarılı!</h3>
+        <p className="text-sm text-slate-500 mb-6 font-medium">Ziyaretçi başarıyla içeri alındı ve giriş saati kaydedildi.</p>
+        <button 
+          onClick={() => {
+            setShowGirisSuccessModal(false);
+            verileriGetir();
+          }} 
+          className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-md">
+          Tamam
+        </button>
+     </div>
+     </div>
       )}
     </main>
   );
