@@ -496,7 +496,7 @@ const bugunTarihi = `${yil}-${ay}-${gun}`;
                {secilenZiyaretci.durum === 'reddedildi' && (
                   <div className="bg-red-50 p-4 rounded-xl border border-red-200 shadow-sm mt-4">
                      <h3 className="text-xs font-black text-red-600 uppercase mb-2 flex items-center gap-1"><ShieldAlert size={14}/> Güvenlik Red Açıklaması</h3>
-                     <p className="text-sm font-bold text-slate-700 italic">"{secilenZiyaretci.red_nedeni || "Neden belirtilmemiş."}"</p>
+                     <p className="text-sm font-bold text-slate-700 italic">{`"${secilenZiyaretci.red_nedeni || "Neden belirtilmemiş."}"`}</p>
                   </div>
                )}
                {(secilenZiyaretci.plaka || secilenZiyaretci.firma_bilgisi) && (

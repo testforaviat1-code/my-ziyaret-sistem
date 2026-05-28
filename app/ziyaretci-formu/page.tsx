@@ -276,7 +276,7 @@ export default function ZiyaretciForm() {
 
                  {/* DÜZENLENEN TEK YER: KUTU KİLİTLENDİ VE OTOMATİK DOLDURULDU */}
                  <div className="space-y-1.5">
-                     <label className="text-[11px] font-bold text-slate-500 uppercase ml-1">Ziyaret Edilecek Çalışan (Sizin ID'niz) <span className="text-red-500">*</span></label>
+                     <label className="text-[11px] font-bold text-slate-500 uppercase ml-1">Ziyaret Edilecek Çalışan (Sizin ID&apos;niz) <span className="text-red-500">*</span></label>
                      <div className="relative group">
                          <User className="absolute left-3.5 top-3.5 text-slate-400" size={18}/>
                          <input 
@@ -449,7 +449,7 @@ export default function ZiyaretciForm() {
               </div>
               <div className="p-6 max-h-[60vh] overflow-y-auto text-sm text-slate-600 space-y-4 leading-relaxed">
                  <p className="font-bold text-slate-800">Türk Hava Yolları A.O. ve TSS (Turkish Support Services) Ziyaretçi Aydınlatma Metni</p>
-                 <p>6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") uyarınca, kimlik (ad, soyad, TC kimlik no), iletişim (telefon numarası) ve işlem güvenliği (giriş-çıkış saatleri, plaka bilgisi) verileriniz; fiziksel mekan güvenliğinin temini, ziyaretçi kayıtlarının oluşturulması ve takibi amaçlarıyla işlenmektedir.</p>
+                 <p>6698 sayılı Kişisel Verilerin Korunması Kanunu (&quot;KVKK&quot;) uyarınca, kimlik (ad, soyad, TC kimlik no), iletişim (telefon numarası) ve işlem güvenliği (giriş-çıkış saatleri, plaka bilgisi) verileriniz; fiziksel mekan güvenliğinin temini, ziyaretçi kayıtlarının oluşturulması ve takibi amaçlarıyla işlenmektedir.</p>
                  <p>Söz konusu kişisel verileriniz, hukuki yükümlülüklerin yerine getirilmesi ve meşru menfaatlerimiz kapsamında, otomatik yollarla işlenmekte olup, yetkili kamu kurum ve kuruluşları dışında üçüncü kişilerle paylaşılmamaktadır.</p>
                  <p>Detaylı bilgi için kurumumuzun KVKK politikasını inceleyebilirsiniz.</p>
               </div>

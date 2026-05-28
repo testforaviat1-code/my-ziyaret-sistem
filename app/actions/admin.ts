@@ -3,7 +3,76 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
-export async function personelKampusGuncelle(personelId: string, yeniKampusId: string | null) {
+/**
+ * İdari Server Action yanıt sözleşmesi.
+ *
+ * **İş Kuralı (Business Logic):** THY idari operasyon ekranındaki kampüs atama ve benzeri
+ * yönetim işlemlerinin sonucunu standart biçimde arayüze iletir; başarı/hata ayrımı operasyon
+ * personelinin anlık geri bildirim almasını sağlar.
+ *
+ * **Yetki (Access Control):** Bu tip yalnızca `admin` rolüyle çağrılan action çıktılarında
+ * kullanılır; istemci tarafında yetki doğrulaması yerine geçmez.
+ */
+export interface AdminIslemSonuc {
+  basarili: boolean;
+  mesaj: string;
+}
+
+/**
+ * Oturum sahibinin `profiller` tablosundan okunan minimal yetki görünümü.
+ *
+ * **İş Kuralı (Business Logic):** İdari müdahale öncesi işlemi başlatan kullanıcının kurumsal
+ * rolünün (`admin`) doğrulanması için kullanılır; tam profil yükü taşınmaz.
+ *
+ * **Yetki (Access Control):** Sunucu tarafında `admin` kontrolü için iç veri modeli; dışa
+ * doğrudan API olarak açılmaz.
+ */
+export interface ProfilRolOzeti {
+  rol: string;
+}
+
+/**
+ * Güvenlik personeline kampüs bağlama güncellemesinin veritabanı gövdesi.
+ *
+ * **İş Kuralı (Business Logic):** THY kampüs bazlı güvenlik görevlendirmesinde, idari birimin
+ * güvenlik personelini fiziksel lokasyona (kampüs) atamasını `profiller.kampus_id` üzerinden
+ * kalıcılaştırır.
+ *
+ * **Yetki (Access Control):** Yalnızca doğrulanmış `admin` oturumuyla üretilir; RLS politikası
+ * güncellemeyi reddederse işlem sessizce başarısız sayılır.
+ */
+export interface ProfilKampusGuncellePayload {
+  kampus_id: string | null;
+}
+
+function hataMesajiAl(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return typeof error === "string" ? error : String(error);
+}
+
+/**
+ * Güvenlik personelinin görev kampüsünü idari olarak günceller.
+ *
+ * **İş Kuralı (Business Logic):** THY Güvenlik Direktörlüğü operasyonunda, idari personelin
+ * güvenlik görevlisini doğru kampüs kapısına / operasyon alanına atamasını sağlar; yanlış kampüs
+ * ataması ziyaretçi giriş-çıkış sürecinde yetki ihlali riski doğurur.
+ *
+ * **Yetki (Access Control):** Yalnızca oturum açmış ve `profiller.rol = 'admin'` olan THY idari
+ * personeli. Hedef kayıt yalnızca `guvenlik` rolündeki personel olabilir.
+ *
+ * @param personelId - Güncellenecek güvenlik personelinin `profiller.id` (UUID); KVKK kapsamında
+ *   kişisel tanımlayıcıdır, istemci tarafında doğrulanmış oturumla eşleştirilir.
+ * @param yeniKampusId - Atanacak kampüs tanımlayıcısı (`kampusler` FK); `null` görevden çekme
+ *   senaryosu için kullanılabilir. Sunucu RLS ile yazma yetkisini ikinci kez doğrular.
+ * @returns İşlem sonucu; `basarili: false` durumunda `mesaj` kullanıcıya gösterilir, ayrıntılı
+ *   DB/RLS hataları istemciye sızdırılmadan genelleştirilir.
+ */
+export async function personelKampusGuncelle(
+  personelId: string,
+  yeniKampusId: string | null
+): Promise<AdminIslemSonuc> {
   try {
     // Senin sistemindeki standart Supabase başlatma kodları
     const cookieStore = await cookies();
@@ -50,9 +119,10 @@ if (hedefProfil.rol !== "guvenlik") {
 }
     // 3. ASIL İŞLEM VE FATURA KONTROLÜ
     // Güncellemeyi yap ve .select('id') ile dönen satırları geri iste!
+    const guncelleme: ProfilKampusGuncellePayload = { kampus_id: yeniKampusId };
     const { data: guncellenenVeri, error: updateError } = await supabase
       .from("profiller")
-      .update({ kampus_id: yeniKampusId })
+      .update(guncelleme)
       .eq("id", personelId)
       .select("id"); // İŞTE BÜYÜ BURADA: "Kimi güncelledin, kanıt göster!"
 
@@ -72,8 +142,8 @@ if (hedefProfil.rol !== "guvenlik") {
     // Her şey kusursuzsa onayı ver.
     return { basarili: true, mesaj: "Personel kampüsü başarıyla güncellendi." };
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Kampüs Güncelleme Hatası:", error);
-    return { basarili: false, mesaj: "Sistemsel bir hata: " + error.message };
+    return { basarili: false, mesaj: "Sistemsel bir hata: " + hataMesajiAl(error) };
   }
 }

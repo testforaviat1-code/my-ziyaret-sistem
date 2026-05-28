@@ -116,7 +116,7 @@ export default function Taleplerim() {
                               <ShieldAlert className="text-red-500 mt-0.5" size={20}/>
                               <div>
                                  <p className="text-xs font-black text-red-600 uppercase">Güvenlik Red Açıklaması:</p>
-                                 <p className="text-sm font-semibold text-slate-700 mt-1 italic">"{talep.red_nedeni || "Neden belirtilmemiş."}"</p>
+                                 <p className="text-sm font-semibold text-slate-700 mt-1 italic">{`"${talep.red_nedeni || "Neden belirtilmemiş."}"`}</p>
                               </div>
                            </div>
                         )}

@@ -510,7 +510,7 @@ const icerideKalanSayisi = ziyaretciler.filter(k => k.durum === 'iceride').lengt
     {/* DİNAMİK ABONMAN ROZETİ (Sadece bitiş tarihi olan VIP'lerde çıkar) */}
     {kisi.bitis_tarihi && new Date(kisi.bitis_tarihi).setHours(0,0,0,0) > new Date().setHours(0,0,0,0) && (
         <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded border border-blue-200 uppercase tracking-wider font-bold">
-            📅 {new Date(kisi.bitis_tarihi).toLocaleDateString('tr-TR')} 'E KADAR
+            {`📅 ${new Date(kisi.bitis_tarihi).toLocaleDateString('tr-TR')} 'E KADAR`}
         </span>
     )}
 </div>
@@ -607,7 +607,7 @@ const icerideKalanSayisi = ziyaretciler.filter(k => k.durum === 'iceride').lengt
                {secilenZiyaretci.durum === 'reddedildi' && (
                   <div className="bg-red-50 p-4 rounded-xl border border-red-200 shadow-sm mt-4 animate-in fade-in">
                      <h3 className="text-xs font-black text-red-600 uppercase mb-2 flex items-center gap-1"><ShieldAlert size={14}/> Güvenlik Red Açıklaması</h3>
-                     <p className="text-sm font-bold text-slate-700 italic">"{secilenZiyaretci.red_nedeni || "Neden belirtilmemiş."}"</p>
+                     <p className="text-sm font-bold text-slate-700 italic">{`"${secilenZiyaretci.red_nedeni || "Neden belirtilmemiş."}"`}</p>
                   </div>
                )}
               
