@@ -8,10 +8,15 @@ export default function SignOutButton() {
   const router = useRouter()
 
   const handleSignOut = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error("[signOut] hata:", e);
+    } finally {
+      router.push("/login"); // hata olsa da kullanıcıyı login'e at
+    }
+  };
 
   return (
     <button

@@ -1,159 +1,134 @@
 # Ziyaretçi Yönetim Sistemi (VMS)
 
-Kurumsal ziyaretçi onay, giriş–çıkış ve operasyon süreçlerini dijitalleştiren web uygulaması. Bu depo, **Faz 1 (MVP)** kapsamındaki bulut tabanlı sürümü içerir; **Faz 2**’de altyapı kurum içi **THY On-Premise** ortamına taşınacaktır.
+Kurumsal saha güvenliği için ziyaretçi kaydı, onay ve giriş/çıkış denetimi modülü. Next.js (App Router) üzerinde Hexagonal (Port/Adapter) yaklaşımıyla inşa edilmiştir; kimlik doğrulama ve veri erişimi soyutlanmış, kişisel veri (PII) sunucu sınırında izole edilmiş ve KVKK uyumlu bir mimari hedeflenmiştir.
 
----
+> Bu uygulama, kurumsal portal içinde bir mikro-frontend (portlet) olarak çalışacak şekilde tasarlanmıştır. Kimlik (SSO) ve veritabanı (on-prem) sağlayıcıları, çağrı noktalarına dokunmadan değiştirilebilecek iki adaptör arkasında soyutlanmıştır.
 
-## Proje Özeti (Executive Summary)
+## İçindekiler
 
-Geleneksel, e-posta ve manuel onay zincirine dayalı ziyaretçi süreçleri; gecikme, izlenebilirlik eksikliği ve operasyonel yük üretmektedir. Bu proje, süreci tek bir dijital platformda toplayarak:
+- [Mimari Bakış](#mimari-bakış)
+- [Teknoloji Yığını](#teknoloji-yığını)
+- [Proje Yapısı](#proje-yapısı)
+- [Güvenlik ve KVKK İlkeleri](#güvenlik-ve-kvkk-i̇lkeleri)
+- [Başlangıç (Local Development)](#başlangıç-local-development)
+- [Ortam Değişkenleri](#ortam-değişkenleri)
+- [Mimari Yol Haritası](#mimari-yol-haritası)
+- [Geliştirme Standartları](#geliştirme-standartları)
+- [Dokümantasyon](#dokümantasyon)
 
-- **Operasyonel verimlilik:** Personel talep oluşturma, güvenlik giriş–çıkış ve idari yönetim ekranlarının rol tabanlı ayrımı.
-- **Güvenlik ve uyumluluk:** Sunucu tarafı doğrulama, denetim (audit) kayıtları, kişisel veri maskeleme (TC, telefon) ve veritabanı düzeyinde erişim kısıtları (RLS).
-- **Modern mimari:** Dışarıya açık REST yüzeyi olmadan, kapalı devre **Next.js Server Actions** ile iş mantığının sunucuda tutulması.
+## Mimari Bakış
 
-Hedef, kurumsal güvenlik politikalarına uygun, ölçeklenebilir ve APEX ortamına devredilebilir bir **Minimum Viable Product (MVP)** sunmaktır.
+Sistem dört katmana ayrılmıştır. Üst katmanlar yalnızca bir alt katmanın arayüzünü tanır; somut sağlayıcı en altta izole edilir.
 
----
+┌───────────────────────────────────────────────────────────┐
+│  İSTEMCİ (App Router – Client Components)                   │
+│  Sayfalar, paneller, formlar — yalnızca DTO görür           │
+└───────────────────────────┬───────────────────────────────┘
+│ Server Actions (mutasyon)
+│ Repository (okuma, maskeli DTO)
+┌───────────────────────────▼───────────────────────────────┐
+│  SUNUCU SINIRI                                              │
+│  • actions/.ts      → yazma; whitelist, rol kontrolü       │
+│  • repositories/.ts → okuma; maskeleme (PII izolasyonu)    │
+│  • auth/Provider.ts  → getCurrentUser(): AuthUser           │
+└───────────────────────────┬───────────────────────────────┘
+│ Adaptör arayüzleri
+┌───────────────────────────▼───────────────────────────────┐
+│  SAĞLAYICI                                                  │
+│  Mevcut Durum (Faz 1): Supabase (Auth + Postgres + Realtime)│
+│  Hedef Kurumsal Mimari (Faz 2): Keycloak/Azure AD + On-Prem │
+└───────────────────────────────────────────────────────────┘
 
-## Teknoloji Yığını (Tech Stack)
+Temel ilkeler:
 
-| Katman | Teknoloji | Notlar |
-|--------|-----------|--------|
-| **Framework** | Next.js 16 (App Router) | SSR, middleware, güvenlik başlıkları |
-| **UI** | React 19, Tailwind CSS 4 | Bileşen tabanlı arayüz |
-| **Dil** | TypeScript 5 | `strict: true` derleyici modu |
-| **Veritabanı & Auth** | Supabase (PostgreSQL, Auth, Realtime) | Faz 1; Faz 2’de kurumsal DB/LDAP ile değişecek |
-| **İstemci–sunucu** | `@supabase/ssr` | Cookie tabanlı oturum |
-| **İkonlar** | Lucide React | Arayüz sembolleri |
+- Tek kimlik sözleşmesi: Uygulama `supabase.auth` değil, `AuthUser` (`id, sicilNo, rol, kampusId, tamAd`) tanır. Kaynak: `lib/auth/Provider.ts`.
+- PII sunucu sınırını terk etmez: Ham TC/GSM yalnızca sunucuda işlenir; istemciye yalnızca maskelenmiş `TalepDTO` iner.
+- Yazma = sunucu otoritesi: Tüm mutasyonlar Server Action'dan geçer; kolon whitelist'i, `durum` zorlaması ve rol kontrolü sunucudadır.
+- Realtime = tetikleyici: Delta güncellemeleri payload'dan yalnızca `id` alır, maskeli DTO'yu sunucudan çeker.
+- Güvenlik dağıtım katmanında gömülü: Nonce tabanlı CSP, `frame-ancestors`, güvenlik başlıkları ve rate-limiting middleware/action seviyesinde.
 
-**Önemli:** Projede `app/api/` altında **hiçbir API Route tanımlı değildir**. Tüm mutasyonlar ve yetkili işlemler `app/actions/` altındaki Server Actions üzerinden yürütülür.
+Ayrıntı: [`docs/architecture/overview.md`](docs/architecture/overview.md)
 
----
+## Teknoloji Yığını
 
-## Mimari ve Güvenlik Stratejisi (Architecture & Security)
+| Katman | Teknoloji |
+|---|---|
+| Framework | Next.js 16 (App Router) |
+| UI | React 19, Tailwind CSS v4, lucide-react |
+| Kimlik | Supabase Auth (Adapter arkasında — SSO'ya hazır) |
+| Veri | Supabase Postgres + Realtime (Repository arkasında — on-prem'e hazır) |
+| SSR/İstemci köprüsü | `@supabase/ssr` |
+| Dil | TypeScript (strict) |
 
-### Kapalı devre sunucu modeli
+## Proje Yapısı
+.
+├── app/
+│   ├── actions/              # Server Actions (yazma/mutasyon)
+│   │   ├── admin.ts          #   kampusEkle/Sil, personelKampusGuncelle (rol: admin)
+│   │   ├── guvenlik.ts       #   giriş/çıkış, toplu işlem (rol: guvenlik/admin)
+│   │   └── ziyaretci.ts      #   yeniZiyaretciKaydet (whitelist + durum otoritesi)
+│   ├── guvenlik-panel/       # Güvenlik personeli ekranı (DTO + delta realtime)
+│   ├── idari-panel/          # Admin ekranı (DTO + delta realtime + istatistik)
+│   ├── taleplerim/           # Personelin kendi talepleri
+│   ├── ziyaretci-formu/      # Ziyaretçi kaydı formu
+│   ├── login/                # Supabase Auth — Faz 2'de SSO ile değiştirilir
+│   ├── layout.tsx
+│   └── page.tsx              # Ana portal
+├── lib/
+│   ├── auth/Provider.ts      # AuthAdapter: getCurrentUser(), AuthUser, Rol
+│   ├── repositories/TalepRepository.ts  # Okuma + DTO maskeleme + kampüs zırhı
+│   ├── supabase/             # client/server/hooks (sağlayıcı adaptörü)
+│   ├── guvenlik/rateLimit.ts # Hız koruması (gateway'in ikinci hattı)
+│   ├── formatlayici.ts       # maskeleTC / maskeleTelefon / formatTarih
+│   ├── zaman.ts              # TR saat dilimi yardımcıları
+│   └── audit.ts              # Denetim günlüğü yazımı (sunucu)
+├── middleware.ts             # Yetki kapısı + Nonce CSP + güvenlik başlıkları
+├── next.config.ts            # Statik güvenlik başlıkları
+└── docs/                     # Mimari, güvenlik, KVKK, runbook, onboarding
 
-- Dış istemcilere açık **REST API Route yok** (`app/api/` kullanılmıyor).
-- İş kuralları: `guvenlik.ts`, `ziyaretci.ts`, `admin.ts` — `"use server"` ile işaretli Server Actions.
-- Rol bazlı rota koruması: `middleware.ts` içinde `/guvenlik-panel`, `/idari-panel`, `/taleplerim`, `/ziyaretci-formu` eşlemeleri.
+## Güvenlik ve KVKK İlkeleri
 
-### OWASP odaklı önlemler
+- Veri minimizasyonu: Repository `select('*')` kullanmaz; yalnızca gerekli kolonları çeker, PII'yi maskeleyip DTO döner.
+- Maskeleme sunucuda kesinleşir: TC `12*******34`, GSM `5XX **** XX` formatında; ham değer istemciye hiç gönderilmez (realtime dahil).
+- Yetki çok katmanlı: Middleware (rota), Server Action / Repository (işlem), Supabase RLS (satır) — savunma derinliği.
+- Mutasyon güvenliği: Kolon whitelist'i, `durum` sunucu zorlaması, ham DB hatalarının maskelenmesi, batch ve serbest-metin sınırları.
+- Tarayıcı güvenliği: Per-request nonce CSP (`unsafe-inline/eval` yok), `frame-ancestors` ile kontrollü gömme, HSTS, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`.
 
-| Alan | Uygulama |
-|------|----------|
-| **Kimlik doğrulama** | Supabase Auth + oturum cookie’leri; korumalı rotalarda `getUser()` kontrolü |
-| **Yetkilendirme** | `profiller.rol` (personel, guvenlik, admin); kampüs kısıtı güvenlik işlemlerinde |
-| **Veri erişimi** | Supabase **Row Level Security (RLS)**; sunucu tarafı ek filtreler |
-| **Girdi doğrulama** | Sunucuda zaman kontrolü (`gecmisZamaniEngelle`), TC/GSM format kısıtları, `ziyaret_edilecek_kisi` sunucuda profilden türetilir |
-| **HTTP güvenliği** | `next.config.ts`: CSP, `X-Frame-Options`, `X-Content-Type-Options`, HSTS, `Referrer-Policy`, `Permissions-Policy` |
-| **Hassas veri gösterimi** | `lib/formatlayici.ts`: TC ve telefon maskeleme |
+Ayrıntı: [`docs/security/threat-model.md`](docs/security/threat-model.md), [`docs/security/headers-and-csp.md`](docs/security/headers-and-csp.md), [`docs/data/kvkk-data-map.md`](docs/data/kvkk-data-map.md)
 
-### Strict Type Safety
-
-`tsconfig.json` içinde `"strict": true` etkin. Server Actions ve paylaşılan tipler (`ZiyaretciVerisi`, `ProfilGuvenlikOzeti` vb.) derleme zamanında sözleşmeyi zorlar; `any` kullanımı minimumda tutulmalıdır.
-
-### Anti-XSS ve HTML Entity
-
-- **React JSX:** Kullanıcı girdisi varsayılan olarak escape edilir; `dangerouslySetInnerHTML` kullanılmaz.
-- **HTML Entity:** Statik ve dinamik metinlerde özel karakterler entity ile kodlanır (ör. arayüzde `&gt;` kullanımı).
-- **CSP:** Script ve bağlantı kaynakları `default-src 'self'` ve Supabase hostları ile sınırlandırılır; `object-src 'none'`, `frame-ancestors 'self'`.
-
-Üretimde CSP’nin nonce tabanlı sıkılaştırılması planlanabilir (yorum: `next.config.ts`).
-
----
-
-## APEX Devir Teslim Matrisi (Migration Handover)
-
-Bu sürüm **MVP**’dir. Faz 2 geçişinde aşağıdaki bileşenler kurumsal APEX yığınına taşınacaktır.
-
-| Bileşen | Faz 1 (Mevcut) | Faz 2 (Hedef — APEX On-Premise) |
-|---------|----------------|----------------------------------|
-| **Uygulama barındırma** | Next.js (geliştirme / bulut) | Kurum içi APEX sunucuları |
-| **Kimlik doğrulama** | Supabase Auth | **APEX Active Directory (LDAP)** entegrasyonu |
-| **Veritabanı** | Supabase PostgreSQL + RLS politikaları | Kurumsal PostgreSQL / eşdeğer; RLS kurallarının yeniden eşlenmesi |
-| **Şifreleme / anahtar yönetimi** | Supabase yönetimli anahtarlar | **HSM / KMS** kurumsal şifreleme katmanı |
-| **API yüzeyi** | Yok (yalnızca Server Actions) | Aynı prensip korunmalı; gereksiz public REST açılmamalı |
-| **Denetim** | `lib/audit.ts` log akışları | Kurumsal SIEM / log arşivine yönlendirme |
-
-**Devir teslim notları:**
-
-1. `.env.local` ve Supabase proje kimlik bilgileri **üretim sırları olarak repoya yazılmaz**.
-2. RLS politikaları ve `profiller` / `talepler` şema dokümantasyonu APEX DBA ekibiyle paylaşılmalıdır.
-3. Middleware rol haritası (`ROUTE_ROLES`) LDAP grup eşlemesiyle hizalanmalıdır.
-
----
-
-## Kurulum Kılavuzu (Getting Started)
-
-### Ön koşullar
-
-- **Node.js** 20.x veya üzeri (LTS önerilir)
-- **npm** 10+
-- Erişilebilir bir **Supabase** projesi (URL + anon key)
-
-### Kurulum adımları
-
-Depo kökünde (`my-ziyaret-sistem`):
+## Başlangıç (Local Development)
 
 ```bash
 npm install
+cp .env.example .env.local
 npm run dev
 ```
 
-Tarayıcıda: [http://localhost:3000](http://localhost:3000)
+Detaylı kurulum, test verisi ve rol atama: [`docs/onboarding/local-development.md`](docs/onboarding/local-development.md)
 
-Diğer komutlar:
-
-```bash
-npm run build   # üretim derlemesi
-npm run start   # üretim sunucusu
-npm run lint    # ESLint (app, components, lib)
-```
-
-### Ortam değişkenleri
-
-Proje kökünde `.env.local` oluşturun. **Gerçek anahtarları bu dosyaya commit etmeyin.** `.gitignore` içinde `.env*` tanımlı olmalıdır.
-
-```env
-# Supabase — Faz 1
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-```
+## Ortam Değişkenleri
 
 | Değişken | Açıklama |
-|----------|----------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase proje API URL’si |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon (public) API anahtarı; RLS ile sınırlandırılmış istemci erişimi |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase proje URL'i |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon (public) anahtarı |
+| `NEXT_PUBLIC_PORTAL_ANCESTORS` | Portlet gömme için izinli üst origin(ler), CSP `frame-ancestors` |
 
-> **Güvenlik:** `service_role` veya üretim gizli anahtarları istemci tarafına (`NEXT_PUBLIC_*`) eklenmemelidir. Faz 2’de LDAP ve KMS yapılandırması ayrı kurumsal secret store üzerinden yönetilecektir.
+## Mimari Yol Haritası
 
----
+| Faz | Kapsam | Durum |
+|---|---|---|
+| Faz 0 | Güvenlik ve build kırılganlıkları: `getUser`, whitelist + `durum` otoritesi, ham hata maskeleme, ayrıcalıklı yazmaların Server Action'a taşınması | Tamamlandı |
+| Faz 1 | Hexagonal: Auth Adapter, Repository + DTO (PII izolasyonu), delta realtime | Tamamlandı |
+| Faz 1.5 | DevSecOps: Nonce CSP, `frame-ancestors`, rate-limiting, batch sınırları | Tamamlandı |
+| Faz 2 | Kurumsal entegrasyon: SSO (`Provider.ts` swap), on-prem DB (Repository impl. swap), portlet kabuğu | Planlandı |
+| Faz 3 | Gözlemlenebilirlik ve ölçek: merkezi log/trace, Redis tabanlı rate-limit, sunucu-taraflı arama/pagination | Planlandı |
 
-## Proje yapısı (özet)
+## Geliştirme Standartları
 
-```
-my-ziyaret-sistem/
-├── app/
-│   ├── actions/          # Server Actions (guvenlik, ziyaretci, admin)
-│   ├── guvenlik-panel/
-│   ├── idari-panel/
-│   ├── taleplerim/
-│   ├── ziyaretci-formu/
-│   └── login/
-├── components/
-├── lib/                  # Supabase istemcileri, audit, formatlayıcı
-├── middleware.ts         # Rol tabanlı rota koruması
-└── next.config.ts        # Güvenlik başlıkları (CSP vb.)
-```
+- TypeScript strict; iş mantığında `any` kullanılmaz — domain tipleri ve rol/durum union'ları esastır.
+- Tüm okuma `repositories/` üzerinden, tüm yazma `actions/` üzerinden yapılır. İstemci bileşeni doğrudan `supabase.from(...)` çağırmaz.
+- Ham PII hiçbir DTO'ya, log'a veya URL parametresine girmez.
+- Her mimari karar bir ADR ile kayıt altına alınır: [`docs/architecture/adr/`](docs/architecture/adr/).
 
----
-
-## Lisans ve sahiplik
-
-Kurumsal iç kullanım. Dağıtım ve üçüncü taraf paylaşımı kurum bilgi güvenliği politikalarına tabidir.
-
----
-
-*Son güncelleme: Kurumsal devir-teslim dokümantasyonu — Faz 1 MVP / Faz 2 THY geçiş planı.*
+##Teknik Dokümantasyon docs altındadır.

@@ -1,8 +1,18 @@
 "use server";
 
-import { gecmisZamaniEngelle } from "@/lib/supabase/zamanKontrol"; // Seninki supabase klasöründeydi, yolu böyle olmalı
+import { gecmisZamaniEngelle } from "@/lib/supabase/zamanKontrol";
+import { hizSiniriAsildi } from "@/lib/guvenlik/rateLimit";
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+
+const GENEL_HATA_MESAJI = "İşlem sırasında sistemsel bir hata oluştu. Lütfen tekrar deneyin.";
+const MAX_BATCH = 20;
+const HIZ_SINIRI_MESAJI = "Çok sık istek gönderildi. Lütfen kısa süre bekleyip tekrar deneyin.";
+
+/** Sunucu tarafı metin uzunluğu sınırı (DoS / aşırı payload). */
+function kirp(deger: string | null | undefined, maxUzunluk: number): string {
+  return String(deger ?? "").trim().slice(0, maxUzunluk);
+}
 
 /**
  * Ziyaretçi ön kayıt formundan sunucuya iletilen talep satırı sözleşmesi.
@@ -31,9 +41,9 @@ export interface ZiyaretciVerisi {
 }
 
 /** INSERT öncesi sunucunun yazdığı zorunlu/üstün alanlar */
-type GuvenliTalepInsert = ZiyaretciVerisi & {
+type GuvenliTalepInsert = Omit<ZiyaretciVerisi, "durum" | "ziyaret_edilecek_kisi"> & {
+  durum: "onaylandi";
   ziyaret_edilecek_kisi: string;
-  kampus_id: number | null | undefined;
 };
 
 /**
@@ -88,28 +98,46 @@ export async function yeniZiyaretciKaydet(ziyaretcilerArray: ZiyaretciVerisi[], 
     return { basarili: false, mesaj: "Yetkisiz işlem: Bu formu doldurma yetkiniz yok." };
   }
 
-  
-
-  // ziyaret_edilecek_kisi: DB ve taleplerim ekranı sicil (veya e-posta ön eki) ile eşleşiyor; frontend değerine güvenilmez.
-    
-    const ziyaretEdilecekKisi = (profil.sicil_no || user.email?.split("@")[0] || "").trim();
-    if (!ziyaretEdilecekKisi) {
-      return { basarili: false, mesaj: "Profil kimlik bilgisi (sicil) eksik; kayıt yapılamıyor." };
-    }
-  
-    const guvenliKayitlar: GuvenliTalepInsert[] = ziyaretcilerArray.map((kayit): GuvenliTalepInsert => ({
-      ...kayit,
-      ziyaret_edilecek_kisi: ziyaretEdilecekKisi,
-      // Personel hangi kampüsü seçtiyse onu kullan, admin ise zaten geleni kullan
-      kampus_id: kayit.kampus_id || profil.kampus_id,
-    }));
-  
-    // 3. KAYIT İŞLEMİ (Senin tumZiyaretciler dizini buraya basıyoruz)
-    const { error } = await supabase.from("talepler").insert(guvenliKayitlar);
-  
-    if (error) {
-      return { basarili: false, mesaj: error.message };
-    }
-  
-    return { basarili: true, mesaj: "Kayıt başarıyla oluşturuldu!" }; 
+  if (hizSiniriAsildi(`ziyaretci-kayit:${user.id}`, 5, 60_000)) {
+    return { basarili: false, mesaj: HIZ_SINIRI_MESAJI };
   }
+
+  if (!Array.isArray(ziyaretcilerArray) || ziyaretcilerArray.length === 0) {
+    return { basarili: false, mesaj: "En az bir ziyaretçi kaydı gerekli." };
+  }
+  if (ziyaretcilerArray.length > MAX_BATCH) {
+    return { basarili: false, mesaj: `Tek seferde en fazla ${MAX_BATCH} ziyaretçi kaydedilebilir.` };
+  }
+
+  const ziyaretEdilecekKisi = (profil.sicil_no || user.email?.split("@")[0] || "").trim();
+  if (!ziyaretEdilecekKisi) {
+    return { basarili: false, mesaj: "Profil kimlik bilgisi (sicil) eksik; kayıt yapılamıyor." };
+  }
+
+  const guvenliTarih = kirp(tarih, 10);
+  const guvenliSaat = kirp(saat, 32);
+
+  const guvenliKayitlar: GuvenliTalepInsert[] = ziyaretcilerArray.map((kayit) => ({
+    ziyaretci_ad_soyad: kirp(kayit.ziyaretci_ad_soyad, 120),
+    ziyaretci_tc: kirp(kayit.ziyaretci_tc, 11),
+    ziyaretci_gsm: kirp(kayit.ziyaretci_gsm, 20),
+    ziyaret_nedeni: kirp(kayit.ziyaret_nedeni, 500),
+    ziyaret_tarihi: kirp(kayit.ziyaret_tarihi, 10) || guvenliTarih,
+    ziyaret_saati: kirp(kayit.ziyaret_saati, 32) || guvenliSaat,
+    plaka: kirp(kayit.plaka, 20) || null,
+    firma_bilgisi: kirp(kayit.firma_bilgisi, 200) || null,
+    bitis_tarihi: kayit.bitis_tarihi ? kirp(kayit.bitis_tarihi, 10) : null,
+    kampus_id: kayit.kampus_id ?? profil.kampus_id ?? null,
+    durum: "onaylandi" as const,
+    ziyaret_edilecek_kisi: ziyaretEdilecekKisi,
+  }));
+
+  const { error } = await supabase.from("talepler").insert(guvenliKayitlar);
+
+  if (error) {
+    console.error("[yeniZiyaretciKaydet] insert hatası:", error.message);
+    return { basarili: false, mesaj: GENEL_HATA_MESAJI };
+  }
+
+  return { basarili: true, mesaj: "Kayıt başarıyla oluşturuldu!" };
+}

@@ -1,8 +1,8 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSupabase } from "@/lib/supabase/hooks";
-import { personelKampusGuncelle } from "@/app/actions/admin";
-import { maskeleTC } from "@/lib/formatlayici";
+import { personelKampusGuncelle, kampusEkle, kampusSil } from "@/app/actions/admin";
+import { getIdariTalepler, getIdariTalepById, type TalepDTO } from "@/lib/repositories/TalepRepository";
 import { useRouter } from "next/navigation";
 import { 
   LogOut, LayoutGrid, Users, Building2, 
@@ -18,14 +18,14 @@ export default function IdariPanel() {
   
   const [loading, setLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
-  const [ziyaretciler, setZiyaretciler] = useState<any[]>([]);
+  const [ziyaretciler, setZiyaretciler] = useState<TalepDTO[]>([]);
   const [kampusler, setKampusler] = useState<any[]>([]);
   const [aramaMetni, setAramaMetni] = useState("");
   const [siralama, setSiralama] = useState<string>("yeniden-eskiye");
   const [secilenKampus, setSecilenKampus] = useState<number | "hepsi">("hepsi");
   const [aktifStatu, setAktifStatu] = useState<"hepsi" | "iceride" | "bekleyen" | "cikis_yapti" | "reddedildi">("hepsi");
   const [zamanFiltresi, setZamanFiltresi] = useState<"bugun" | "gelecek" | "gecmis" | "tumu">("bugun");
-  const [secilenZiyaretci, setSecilenZiyaretci] = useState<any>(null);
+  const [secilenZiyaretci, setSecilenZiyaretci] = useState<TalepDTO | null>(null);
   const [showRotasyonModal, setShowRotasyonModal] = useState(false);
   const [guvenlikPersoneli, setGuvenlikPersoneli] = useState<any[]>([]);
   const [islemYapiliyor, setIslemYapiliyor] = useState<string | null>(null);
@@ -33,20 +33,15 @@ export default function IdariPanel() {
   const [showKampusModal, setShowKampusModal] = useState(false);
   const [yeniKampusIsim, setYeniKampusIsim] = useState("");
   const [silinecekKampus, setSilinecekKampus] = useState<any>(null); 
-  const [silmeOnayAdimi, setSilmeOnayAdimi] = useState(0); 
-  const [istatistikler, setIstatistikler] = useState({
-    toplam: 0, iceride: 0, bekleyen: 0, cikan: 0, reddedilen: 0 
-  });
+  const [silmeOnayAdimi, setSilmeOnayAdimi] = useState(0);
 
-// PROFESYONEL ZAMAN MÜHRÜ (Türkiye Saati ile BUGÜN)
-const simdiTR = new Date().toLocaleString("en-US", { timeZone: "Europe/Istanbul" });
-const tarihNesnesi = new Date(simdiTR);
-const yil = tarihNesnesi.getFullYear();
-const ay = String(tarihNesnesi.getMonth() + 1).padStart(2, '0');
-const gun = String(tarihNesnesi.getDate()).padStart(2, '0');
-const bugunTarihi = `${yil}-${ay}-${gun}`;
-
-
+  const istatistikler = useMemo(() => ({
+    toplam: ziyaretciler.length,
+    iceride: ziyaretciler.filter((i) => i.durum === "iceride").length,
+    bekleyen: ziyaretciler.filter((i) => i.durum === "onaylandi").length,
+    cikan: ziyaretciler.filter((i) => i.durum === "cikis_yapti").length,
+    reddedilen: ziyaretciler.filter((i) => i.durum === "reddedildi").length,
+  }), [ziyaretciler]);
 
   useEffect(() => {
     async function baslat() {
@@ -68,54 +63,70 @@ const bugunTarihi = `${yil}-${ay}-${gun}`;
     baslat();
   }, [router]);
 
-  const verileriGetir = useCallback(async () => {
-    let query = supabase
-      .from('talepler')
-      .select('*, kampusler(isim)');
-
-    if (zamanFiltresi === 'bugun') {
-        query = query.eq('ziyaret_tarihi', bugunTarihi);
-    } else if (zamanFiltresi === 'gelecek') {
-        query = query.gt('ziyaret_tarihi', bugunTarihi);
-    } else if (zamanFiltresi === 'gecmis') {
-        query = query.lt('ziyaret_tarihi', bugunTarihi).limit(500);
-    } else if (zamanFiltresi === 'tumu') {
-        query = query.limit(1000);
-    }
-
-    const { data, error } = await query;
-    if (!error && data) {
-      setZiyaretciler(data);
-      
-      const filtrelenmis = secilenKampus === "hepsi" 
-        ? data 
-        : data.filter(item => item.kampus_id === secilenKampus);
-        
-      setIstatistikler({
-        toplam: filtrelenmis.length,
-        iceride: filtrelenmis.filter((i:any) => i.durum === 'iceride').length,
-        bekleyen: filtrelenmis.filter((i:any) => i.durum === 'onaylandi').length,
-        cikan: filtrelenmis.filter((i:any) => i.durum === 'cikis_yapti').length,
-        reddedilen: filtrelenmis.filter((i:any) => i.durum === 'reddedildi').length 
-      });
-    }
-    setLoading(false);
-  }, [zamanFiltresi, secilenKampus, bugunTarihi]);
-
-  useEffect(() => { 
-    if (isAuthorized) {
-      verileriGetir(); 
-    }
-  }, [verileriGetir, isAuthorized]);
-
   useEffect(() => {
     if (!isAuthorized) return;
+    let iptal = false;
+
+    (async () => {
+      try {
+        const dto = await getIdariTalepler(
+          secilenKampus === "hepsi" ? null : secilenKampus,
+          zamanFiltresi
+        );
+        if (!iptal) setZiyaretciler(dto); 
+      } catch (e) {
+        if (!iptal) { console.error(e); setZiyaretciler([]); }
+      } finally {
+        if (!iptal) setLoading(false);
+      }
+    })();
+
+    return () => { iptal = true; };
+  }, [isAuthorized, secilenKampus, zamanFiltresi]);
+ 
+  useEffect(() => {
+    if (!isAuthorized) return;
+
+    const kampusId = secilenKampus === "hepsi" ? null : secilenKampus;
+
     const channel = supabase
-      .channel('idari_panel_takip')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'talepler' }, () => { verileriGetir(); })
+      .channel("idari_panel_takip")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "talepler" },
+        async (payload) => {
+          if (payload.eventType === "DELETE") {
+            const silinenId = (payload.old as { id?: number })?.id;
+            if (silinenId != null) {
+              setZiyaretciler((prev) => prev.filter((t) => t.id !== silinenId));
+            }
+            return;
+          }
+
+          const degisenId = (payload.new as { id?: number })?.id;
+          if (degisenId == null) return;
+
+          try {
+            const dto = await getIdariTalepById(degisenId, kampusId, zamanFiltresi);
+            setZiyaretciler((prev) => {
+              const idx = prev.findIndex((t) => t.id === degisenId);
+              if (!dto) return idx === -1 ? prev : prev.filter((t) => t.id !== degisenId);
+              if (idx === -1) return [dto, ...prev];
+              const kopya = [...prev];
+              kopya[idx] = dto;
+              return kopya;
+            });
+          } catch (e) {
+            console.error("[idari realtime] DTO getirilemedi:", e);
+          }
+        }
+      )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [verileriGetir, isAuthorized]);
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isAuthorized, secilenKampus, zamanFiltresi]);
 
   const guvenlikleriGetir = async () => {
     const { data } = await supabase
@@ -146,34 +157,35 @@ const bugunTarihi = `${yil}-${ay}-${gun}`;
     }
   };
 
-  // YANLIŞLIKLA SİLİNEN KISIM (GERİ GELDİ)
   const handleKampusEkle = async () => {
     if (!yeniKampusIsim.trim()) return;
-    const { error } = await supabase.from('kampusler').insert([{ isim: yeniKampusIsim.trim().toUpperCase() }]);
-    if (!error) {
+    try {
+      const sonuc = await kampusEkle(yeniKampusIsim);
+      if (!sonuc.basarili) { alert(sonuc.mesaj); return; }
       setYeniKampusIsim(""); setShowKampusModal(false);
-      const { data } = await supabase.from('kampusler').select('*').order('isim');
+      const { data } = await supabase.from("kampusler").select("*").order("isim");
       if (data) setKampusler(data);
-    } else {
-      alert("Bina eklenirken hata oluştu: " + error.message);
+    } catch (e) {
+      console.error("[kampusEkle] çağrı hatası:", e);
+      alert("İşlem tamamlanamadı, lütfen tekrar deneyin.");
     }
   };
 
+
   const handleKampusSil = async () => {
     if (!silinecekKampus) return;
-    const { error } = await supabase.from('kampusler').delete().eq('id', silinecekKampus.id);
-    if (!error) {
-      setKampusler(kampusler.filter(k => k.id !== silinecekKampus.id));
-      if (secilenKampus === silinecekKampus.id) {
-         setSecilenKampus("hepsi");
-         setAktifStatu("hepsi");
-      }
-      setSilmeOnayAdimi(0);
-      setSilinecekKampus(null);
-    } else {
-      alert("UYARI: Bu binaya bağlı güvenlik personeli veya ziyaretçi kayıtları olduğu için silinemiyor olabilir. Hata Detayı: " + error.message);
-      setSilmeOnayAdimi(0);
+    const sonuc = await kampusSil(silinecekKampus.id);
+    if (!sonuc.basarili) {
+      alert(sonuc.mesaj);
+      return;
     }
+    setKampusler(kampusler.filter(k => k.id !== silinecekKampus.id));
+    if (secilenKampus === silinecekKampus.id) {
+      setSecilenKampus("hepsi");
+      setAktifStatu("hepsi");
+    }
+    setSilmeOnayAdimi(0);
+    setSilinecekKampus(null);
   };
 
   const parseDateTime = (tarihStr: string, saatStr: string) => {
@@ -182,20 +194,17 @@ const bugunTarihi = `${yil}-${ay}-${gun}`;
   };
 
   const goruntulenecekListe = ziyaretciler
-    .filter(item => {
-      const kampusUygun = secilenKampus === "hepsi" ? true : item.kampus_id === secilenKampus;
+    .filter((item) => {
       let statuUygun = true;
       if (aktifStatu === "iceride") statuUygun = item.durum === "iceride";
       if (aktifStatu === "bekleyen") statuUygun = item.durum === "onaylandi";
       if (aktifStatu === "cikis_yapti") statuUygun = item.durum === "cikis_yapti";
-      if (aktifStatu === "reddedildi") statuUygun = item.durum === "reddedildi"; 
+      if (aktifStatu === "reddedildi") statuUygun = item.durum === "reddedildi";
       const metin = aramaMetni.toLowerCase();
-      const aramaUygun = 
-        item.ziyaretci_ad_soyad?.toLowerCase().includes(metin) ||
-        item.ziyaretci_tc?.includes(metin) ||
-        item.plaka?.toLowerCase().includes(metin) ||
-        item.ziyaret_edilecek_kisi?.toLowerCase().includes(metin);
-      return kampusUygun && statuUygun && aramaUygun;
+      const aramaUygun =
+        item.ziyaretci_ad_soyad.toLowerCase().includes(metin) ||
+        (item.plaka?.toLowerCase().includes(metin) ?? false);
+      return statuUygun && aramaUygun;
     })
     .sort((a, b) => {
       const zamanA = parseDateTime(a.ziyaret_tarihi, a.ziyaret_saati);
@@ -413,11 +422,11 @@ const bugunTarihi = `${yil}-${ay}-${gun}`;
                            </td>
                            <td className="p-4">
                               <div className="flex items-center gap-1.5">
-                                 <span className={`w-2 h-2 rounded-full ${item.kampus_id === 1 ? 'bg-blue-500' : item.kampus_id === 2 ? 'bg-orange-500' : 'bg-purple-500'}`}></span>
-                                 <span className="text-sm font-medium text-slate-600">{item.kampusler ? item.kampusler.isim : "Bilinmiyor"}</span>
+                                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                 <span className="text-sm font-medium text-slate-600">{item.kampus_isim}</span>
                               </div>
                            </td>
-                           <td className="p-4 text-sm text-slate-700 font-medium">{item.ziyaret_edilecek_kisi}</td>
+                           <td className="p-4 text-sm text-slate-700 font-medium">—</td>
                            <td className="p-4"><div className="font-bold text-slate-800 text-sm">{item.ziyaret_saati}</div><div className="text-xs text-slate-400">{item.ziyaret_tarihi.split('-').reverse().join('.')}</div></td>
                            <td className="p-4">
                               <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase border ${
@@ -448,7 +457,7 @@ const bugunTarihi = `${yil}-${ay}-${gun}`;
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
            <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
              <div className="bg-slate-900 p-5 flex justify-between items-center text-white">
-              <div><h2 className="font-bold text-lg">{secilenZiyaretci.ziyaretci_ad_soyad}</h2><p className="text-xs text-slate-400 font-mono">TC: {maskeleTC(secilenZiyaretci.ziyaretci_tc)}</p></div>
+              <div><h2 className="font-bold text-lg">{secilenZiyaretci.ziyaretci_ad_soyad}</h2><p className="text-xs text-slate-400 font-mono">TC: {secilenZiyaretci.ziyaretci_tc_maskeli}</p></div>
               <button onClick={() => setSecilenZiyaretci(null)} className="bg-white/10 p-2 rounded-full hover:bg-white/20 transition-colors"><X size={20} /></button>
             </div>
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto bg-slate-50">
@@ -462,34 +471,19 @@ const bugunTarihi = `${yil}-${ay}-${gun}`;
    secilenZiyaretci.durum.toUpperCase()}
 </div></div>
                </div>
-               {secilenZiyaretci.durum !== 'onaylandi' && (
-                 <div className={`p-3 rounded-xl border flex items-center gap-3 shadow-sm ${
-                    secilenZiyaretci.durum === 'reddedildi' ? 'bg-red-50 border-red-200 text-red-800' :
-                    secilenZiyaretci.durum === 'iceride' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
-                    'bg-slate-100 border-slate-200 text-slate-800'
-                 }`}>
-                    <UserCheck size={20} className={secilenZiyaretci.durum === 'reddedildi' ? 'text-red-500' : secilenZiyaretci.durum === 'iceride' ? 'text-emerald-500' : 'text-slate-500'} />
-                    <span className="text-sm font-medium">
-                       {secilenZiyaretci.durum === 'reddedildi' && <>Bu ziyaretçi <b>{secilenZiyaretci.islem_yapan_guvenlik || "Eski Kayıt (Bilinmiyor)"}</b> tarafından <b>reddedildi</b>.</>}
-                       {secilenZiyaretci.durum === 'iceride' && <>Bu ziyaretçi <b>{secilenZiyaretci.islem_yapan_guvenlik || "Eski Kayıt (Bilinmiyor)"}</b> tarafından <b>içeri alındı</b>.</>}
-                       {secilenZiyaretci.durum === 'cikis_yapti' && <>Bu ziyaretçinin çıkış işlemi <b>{secilenZiyaretci.islem_yapan_guvenlik || "Eski Kayıt (Bilinmiyor)"}</b> tarafından <b>yapıldı</b>.</>}
-                    </span>
-                 </div>
-               )}
                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                   <div><div className="flex items-center gap-1 text-xs text-slate-500 mb-1"><Building2 size={12}/> Kampüs</div><div className="font-bold text-slate-800 text-sm">{secilenZiyaretci.kampusler ? secilenZiyaretci.kampusler.isim : "Bilinmiyor"}</div></div>
+                   <div><div className="flex items-center gap-1 text-xs text-slate-500 mb-1"><Building2 size={12}/> Kampüs</div><div className="font-bold text-slate-800 text-sm">{secilenZiyaretci.kampus_isim}</div></div>
                    <div><div className="flex items-center gap-1 text-xs text-slate-500 mb-1"><Calendar size={12}/> Tarih</div><div className="font-bold text-slate-800 text-sm">{secilenZiyaretci.ziyaret_tarihi.split('-').reverse().join('.')}</div></div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                    <div><div className="flex items-center gap-1 text-xs text-slate-500 mb-1"><Clock size={12}/> Saat</div><div className="font-bold text-slate-800 text-sm">{secilenZiyaretci.ziyaret_saati}</div></div>
-                   <div><div className="flex items-center gap-1 text-xs text-slate-500 mb-1"><Phone size={12}/> GSM</div><div className="font-bold text-slate-800 text-sm">{secilenZiyaretci.ziyaretci_gsm || "-"}</div></div>
+                   <div><div className="flex items-center gap-1 text-xs text-slate-500 mb-1"><Phone size={12}/> GSM</div><div className="font-bold text-slate-800 text-sm">{secilenZiyaretci.ziyaretci_gsm_maskeli}</div></div>
                   </div>
                </div>
                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                   <div className="text-xs text-slate-400 font-bold uppercase mb-2 border-b pb-1">Ziyaret Detayları</div>
                   <div className="grid grid-cols-1 gap-3">
-                     <div><span className="text-xs text-slate-500">Personel:</span> <span className="font-bold text-slate-800 ml-1">{secilenZiyaretci.ziyaret_edilecek_kisi}</span></div>
                      <div><span className="text-xs text-slate-500">Sebep:</span> <span className="font-medium text-slate-800 ml-1 bg-slate-100 px-2 py-0.5 rounded">{secilenZiyaretci.ziyaret_nedeni}</span></div>
                   </div>
                </div>

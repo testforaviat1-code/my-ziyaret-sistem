@@ -1,8 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useSupabase } from "@/lib/supabase/hooks";
 import { useRouter } from "next/navigation";
-import { maskeleTC, formatTarih } from "@/lib/formatlayici";
+import { formatTarih } from "@/lib/formatlayici";
+import { getTaleplerimForPersonel, type TalepDTO } from "@/lib/repositories/TalepRepository";
 import Link from "next/link";
 import { 
   ArrowLeft, Calendar, Clock, MapPin, User, Briefcase, 
@@ -10,35 +10,28 @@ import {
 } from "lucide-react";
 
 export default function Taleplerim() {
-   const supabase = useSupabase();
   const router = useRouter();
-  const [talepler, setTalepler] = useState<any[]>([]);
+  const [talepler, setTalepler] = useState<TalepDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [arama, setArama] = useState("");
   const [filtre, setFiltre] = useState<"aktif" | "gecmis">("aktif");
 
   useEffect(() => {
     async function verileriGetir() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/login"); return; }
-
-      // Frontend'e sadece oturum açmış personelin taleplerini indir.
-      const { data: profil } = await supabase
-        .from('profiller')
-        .select('sicil_no')
-        .eq('id', user.id)
-        .single();
-      const sicilNo = (profil?.sicil_no || user.email?.split('@')[0] || "").trim();
-      const { data, error } = await supabase
-        .from('talepler')
-        .select('*, kampusler(isim)')
-        .eq('ziyaret_edilecek_kisi', sicilNo)
-        .order('id', { ascending: false });
-
-      if (!error && data) {
-        setTalepler(data);
+      try {
+        const dto = await getTaleplerimForPersonel();
+        setTalepler(dto);
+      } catch (e: unknown) {
+        console.error(e);
+        const mesaj = e instanceof Error ? e.message : "";
+        if (mesaj.includes("Oturum")) {
+          router.push("/login");
+          return;
+        }
+        setTalepler([]);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
     verileriGetir();
   }, [router]);
@@ -107,8 +100,8 @@ export default function Taleplerim() {
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-5 font-bold text-sm">
                            <div><p className="text-[10px] text-slate-400 uppercase mb-1">Tarih</p>{formatTarih(talep.ziyaret_tarihi)} - {talep.ziyaret_saati}</div>
-                           <div><p className="text-[10px] text-slate-400 uppercase mb-1">Yerleşke</p>{talep.kampusler?.isim || "-"}</div>
-                           <div><p className="text-[10px] text-slate-400 uppercase mb-1">TC Kimlik</p>{maskeleTC(talep.ziyaretci_tc)}</div>
+                           <div><p className="text-[10px] text-slate-400 uppercase mb-1">Yerleşke</p>{talep.kampus_isim}</div>
+                           <div><p className="text-[10px] text-slate-400 uppercase mb-1">TC Kimlik</p>{talep.ziyaretci_tc_maskeli}</div>
                            <div><p className="text-[10px] text-slate-400 uppercase mb-1">Araç Plaka</p>{talep.plaka || "Yok"}</div>
                         </div>
                         {talep.durum === 'reddedildi' && (

@@ -25,9 +25,10 @@ export default function Home() {
 
   useEffect(() => {
     async function kontrolEt() {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
+      // getSession() yalnızca yerel çereze güvenir; getUser() token'ı auth sunucusunda doğrular.
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+      if (authError || !user) {
         router.push("/login");
         return;
       }
@@ -35,7 +36,7 @@ export default function Home() {
       const { data: profil } = await supabase
         .from('profiller')
         .select('rol, tam_ad')
-        .eq('id', session.user.id)
+        .eq('id', user.id)
         .single();
 
       if (profil) {
@@ -48,8 +49,13 @@ export default function Home() {
   }, [router]);
 
   const cikisYap = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error("[cikisYap] hata:", e);
+    } finally {
+      router.push("/login");
+    }
   };
 
   const shortcutList = [

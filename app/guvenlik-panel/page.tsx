@@ -2,13 +2,13 @@
 import { useState, useEffect } from "react";
 import { useSupabase } from "@/lib/supabase/hooks";
 import { useRouter } from "next/navigation";
-import { getTRMidnightISO } from "@/lib/zaman";
-import { maskeleTC, formatTarih, maskeleTelefon } from "@/lib/formatlayici";
+import { formatTarih } from "@/lib/formatlayici";
+import { getAktifTalepler, getAktifTalepById, type TalepDTO } from "@/lib/repositories/TalepRepository";
 import { guvenlikIslemi, topluGuvenlikIslemi } from "@/app/actions/guvenlik";
 import { 
   
   LogOut, ShieldAlert, RefreshCw, X, 
-  Phone, User, Calendar, Clock, MapPin, FileText, Truck, Briefcase, Filter, UserCheck, Activity, Users, Car, Home, Building2, ChevronRight, ArrowUpDown
+  Phone, Calendar, Clock, MapPin, FileText, Truck, Briefcase, Filter, UserCheck, Activity, Users, Car, Home, Building2, ChevronRight, ArrowUpDown
 } from "lucide-react";
 import Link from "next/link";
 
@@ -17,10 +17,10 @@ export default function GuvenlikPanel() {
   const router = useRouter();
   
   // --- STATE'LER ---
-  const [ziyaretciler, setZiyaretciler] = useState<any[]>([]);
+  const [ziyaretciler, setZiyaretciler] = useState<TalepDTO[]>([]);
   const [aramaMetni, setAramaMetni] = useState("");
   const [yukleniyor, setYukleniyor] = useState(true);
-  const [secilenZiyaretci, setSecilenZiyaretci] = useState<any>(null);
+  const [secilenZiyaretci, setSecilenZiyaretci] = useState<TalepDTO | null>(null);
   const [showGirisSuccessModal, setShowGirisSuccessModal] = useState(false);
 
   // REDDETME MODALI İÇİN STATE'LER
@@ -113,42 +113,81 @@ export default function GuvenlikPanel() {
   }, [router]);
 
   const verileriGetir = async () => {
-    const hedefKampusId = isAdmin ? adminSecilenKampusId : (personelKampus ? personelKampus.id : null);
-    if (!hedefKampusId) return; 
+    const hedefKampusId = isAdmin ? adminSecilenKampusId : (personelKampus?.id ?? null);
+    if (!hedefKampusId) return;
 
     setYukleniyor(true);
     setSeciliZiyaretciler([]);
-    
-    // Türkiye saatine sabitlenmiş Gece 00:00 başlangıcı
-    const bugunISO = getTRMidnightISO();
-  
-// 2. 4 Altın Kuralın Kodlanmış Hali
-let query = supabase
-  .from("talepler")
-  .select("*, bitis_tarihi, kampusler(isim)")
-  .eq('kampus_id', hedefKampusId)
-  .or(`durum.eq.iceride,and(durum.in.(cikis_yapti,reddedildi),son_islem_tarihi.gte.${bugunISO}),and(durum.eq.onaylandi,ziyaret_tarihi.gte.${bugunISO}),and(durum.eq.onaylandi,bitis_tarihi.gte.${bugunISO})`);
 
-  if (aktifFiltre === "bugun") {
-    // 1. Ziyaret tarihi tam bugün olanlar VEYA
-    // 2. Dünden içeride kalıp çıkış yapmamış olanlar VEYA
-    // 3. VIP olup abonmanlık süresi (bitis_tarihi) bugünden büyük/eşit olanlar!
-    query = query.or(`ziyaret_tarihi.eq.${bugunTarihi},durum.eq.iceride,bitis_tarihi.gte.${bugunTarihi}`);
-  }
-     else if (aktifFiltre === "gelecek") {
-      query = query.gt("ziyaret_tarihi", bugunTarihi);
-    
-    
-    } else if (aktifFiltre === "tumu") {
-      query = query.limit(500);
-    }
+    try {
+      let dto = await getAktifTalepler(hedefKampusId);
 
-    const { data, error } = await query;
-    if (data) {
-      setZiyaretciler(data); // Sahte maskeleri attık, veritabanından ne geliyorsa o!
+      if (aktifFiltre === "bugun") {
+        dto = dto.filter(
+          (k) =>
+            k.ziyaret_tarihi === bugunTarihi ||
+            k.durum === "iceride" ||
+            (k.bitis_tarihi != null && k.bitis_tarihi >= bugunTarihi)
+        );
+      } else if (aktifFiltre === "gelecek") {
+        dto = dto.filter((k) => k.ziyaret_tarihi > bugunTarihi);
+      }
+
+      setZiyaretciler(dto);
+    } catch (e) {
+      console.error(e);
+      setZiyaretciler([]);
+    } finally {
+      setYukleniyor(false);
     }
-    setYukleniyor(false);
   };
+
+  // --- REALTIME (DELTA) ---
+  useEffect(() => {
+    const hedefKampusId = isAdmin ? adminSecilenKampusId : (personelKampus?.id ?? null);
+    if (!hedefKampusId) return;
+
+    const channel = supabase
+      .channel(`guvenlik_panel_${hedefKampusId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "talepler", filter: `kampus_id=eq.${hedefKampusId}` },
+        async (payload) => {
+          if (payload.eventType === "DELETE") {
+            const silinenId = (payload.old as { id?: number })?.id;
+            if (silinenId != null) {
+              setZiyaretciler((prev) => prev.filter((t) => t.id !== silinenId));
+            }
+            return;
+          }
+
+          const degisenId = (payload.new as { id?: number })?.id;
+          if (degisenId == null) return;
+
+          try {
+            const dto = await getAktifTalepById(
+              degisenId,
+              isAdmin ? adminSecilenKampusId : null
+            );
+            setZiyaretciler((prev) => {
+              const idx = prev.findIndex((t) => t.id === degisenId);
+              if (!dto) return idx === -1 ? prev : prev.filter((t) => t.id !== degisenId);
+              if (idx === -1) return [dto, ...prev];
+              const kopya = [...prev];
+              kopya[idx] = dto;
+              return kopya;
+            });
+          } catch (e) {
+            console.error("[guvenlik realtime] DTO getirilemedi:", e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isAdmin, adminSecilenKampusId, personelKampus]);
 
   useEffect(() => {
     if (personelKampus || (isAdmin && adminSecilenKampusId)) {
@@ -207,7 +246,9 @@ try {
     if (!onayi) return;
 
     // Ekranı güncelle
-    setZiyaretciler((liste) => liste.map((k) => seciliZiyaretciler.includes(k.id) ? { ...k, durum: 'cikis_yapti', islem_yapan_guvenlik: personelAdi } : k));
+    setZiyaretciler((liste) =>
+      liste.map((k) => (seciliZiyaretciler.includes(k.id) ? { ...k, durum: "cikis_yapti" } : k))
+    );
     const islemListesi = [...seciliZiyaretciler];
     setSeciliZiyaretciler([]); 
 
@@ -237,7 +278,8 @@ try {
       const metin = aramaMetni.toLowerCase();
       const aramaSonucu = 
         kisi.ziyaretci_ad_soyad?.toLowerCase().includes(metin) ||
-        kisi.ziyaretci_tc?.includes(metin) ||
+        kisi.ziyaretci_tc_maskeli?.includes(metin) ||
+        kisi.ziyaretci_gsm_maskeli?.includes(metin) ||
         kisi.plaka?.toLowerCase().includes(metin);
 
       if (!aramaSonucu) return false;
@@ -515,13 +557,13 @@ const icerideKalanSayisi = ziyaretciler.filter(k => k.durum === 'iceride').lengt
     )}
 </div>
                   <div className="text-xs text-slate-500 font-mono flex gap-2">
-                      <span>TC: {maskeleTC(kisi.ziyaretci_tc)}</span>
+                      <span>TC: {kisi.ziyaretci_tc_maskeli}</span>
                       {kisi.firma_bilgisi && <span className="text-blue-500 font-bold">• {kisi.firma_bilgisi}</span>}
                   </div>
                 </td>
                 <td className="p-3">
                    <div className="flex flex-col gap-1 items-start">
-                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${kisi.ziyaret_tipi === 'destek' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-500'}`}>{kisi.ziyaret_tipi === 'destek' ? 'VIP' : 'Normal'}</span>
+                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${kisi.bitis_tarihi ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-500'}`}>{kisi.bitis_tarihi ? 'VIP' : 'Normal'}</span>
                      {kisi.plaka && (
                         <span className="flex items-center gap-1 bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border border-yellow-200">
                             <Car size={10}/> {kisi.plaka}
@@ -558,7 +600,7 @@ const icerideKalanSayisi = ziyaretciler.filter(k => k.durum === 'iceride').lengt
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
            <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="bg-slate-900 p-5 flex justify-between items-center text-white">
-              <div><h2 className="font-bold text-lg">{secilenZiyaretci.ziyaretci_ad_soyad}</h2><p className="text-xs text-slate-400 font-mono">TC: {maskeleTC(secilenZiyaretci.ziyaretci_tc)}</p></div>
+              <div><h2 className="font-bold text-lg">{secilenZiyaretci.ziyaretci_ad_soyad}</h2><p className="text-xs text-slate-400 font-mono">TC: {secilenZiyaretci.ziyaretci_tc_maskeli}</p></div>
               <button onClick={() => setSecilenZiyaretci(null)} className="bg-white/10 p-2 rounded-full hover:bg-white/20 transition-colors"><X size={20} /></button>
             </div>
             
@@ -571,26 +613,10 @@ const icerideKalanSayisi = ziyaretciler.filter(k => k.durum === 'iceride').lengt
                   </div>
                </div>
                
-               {secilenZiyaretci.durum !== 'onaylandi' && (
-                 <div className={`p-3 rounded-xl border flex items-center gap-3 shadow-sm ${
-                    secilenZiyaretci.durum === 'reddedildi' ? 'bg-red-50 border-red-200 text-red-800' :
-                    secilenZiyaretci.durum === 'iceride' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
-                    'bg-slate-100 border-slate-200 text-slate-800'
-                 }`}>
-                    <UserCheck size={20} className={secilenZiyaretci.durum === 'reddedildi' ? 'text-red-500' : secilenZiyaretci.durum === 'iceride' ? 'text-emerald-500' : 'text-slate-500'} />
-                    <span className="text-sm font-medium">
-                       {secilenZiyaretci.durum === 'reddedildi' && <>Bu ziyaretçi <b>{secilenZiyaretci.islem_yapan_guvenlik || "Eski Kayıt (Bilinmiyor)"}</b> tarafından <b>reddedildi</b>.</>}
-                       {secilenZiyaretci.durum === 'iceride' && <>Bu ziyaretçi <b>{secilenZiyaretci.islem_yapan_guvenlik || "Eski Kayıt (Bilinmiyor)"}</b> tarafından <b>içeri alındı</b>.</>}
-                       {secilenZiyaretci.durum === 'cikis_yapti' && <>Bu ziyaretçinin çıkış işlemi <b>{secilenZiyaretci.islem_yapan_guvenlik || "Eski Kayıt (Bilinmiyor)"}</b> tarafından <b>yapıldı</b>.</>}
-                    </span>
-                 </div>
-               )}
-
                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                  <h3 className="text-xs font-black text-slate-400 uppercase mb-3 border-b pb-1">Ziyaret Detayları</h3>
                  <div className="grid grid-cols-2 gap-4 mb-4">
-                   <div><div className="flex items-center gap-1 text-xs text-slate-500 mb-1"><User size={12}/> Personel</div><div className="font-bold text-slate-800">{secilenZiyaretci.ziyaret_edilecek_kisi}</div></div>
-                   <div><div className="flex items-center gap-1 text-xs text-slate-500 mb-1"><MapPin size={12}/> Kampüs</div><div className="font-bold text-slate-800 text-sm">{secilenZiyaretci.kampusler ? secilenZiyaretci.kampusler.isim : "Bilinmiyor"}</div></div>
+                   <div><div className="flex items-center gap-1 text-xs text-slate-500 mb-1"><MapPin size={12}/> Kampüs</div><div className="font-bold text-slate-800 text-sm">{secilenZiyaretci.kampus_isim}</div></div>
                  </div>
                  <div className="grid grid-cols-2 gap-4 mb-4">
                    <div><div className="flex items-center gap-1 text-xs text-slate-500 mb-1"><Calendar size={12}/> Tarih</div><div className="font-bold text-slate-800">{formatTarih(secilenZiyaretci.ziyaret_tarihi)}</div></div>
@@ -600,7 +626,7 @@ const icerideKalanSayisi = ziyaretciler.filter(k => k.durum === 'iceride').lengt
                  
                  <div className="mt-4 pt-4 border-t border-slate-100">
                     <div className="flex items-center gap-1 text-xs text-slate-500 mb-1"><Phone size={12}/> GSM</div>
-                    <div className="font-bold text-slate-800 text-sm font-mono tracking-widest">{maskeleTelefon(secilenZiyaretci.ziyaretci_gsm)}</div>
+                    <div className="font-bold text-slate-800 text-sm font-mono tracking-widest">{secilenZiyaretci.ziyaretci_gsm_maskeli}</div>
                  </div>
                </div>
 
@@ -639,7 +665,7 @@ const icerideKalanSayisi = ziyaretciler.filter(k => k.durum === 'iceride').lengt
       )}
 
       {/* REDDETME MODALI */}
-      {showRedModal && (
+      {showRedModal && secilenZiyaretci && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
            <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6 animate-in zoom-in-95">
               <div className="flex items-center gap-3 mb-4"><div className="bg-red-100 p-2 rounded-full text-red-600"><ShieldAlert size={24}/></div><h3 className="font-bold text-slate-800 text-lg">Giriş Reddi</h3></div>

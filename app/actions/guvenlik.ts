@@ -129,7 +129,10 @@ export async function guvenlikIslemi(talepId: number, yeniDurum: string, redNede
     // update işlemi sonrası güncellenen kaydı görmek için select() ekledik
     const { data, error } = await sorgu.select();
 
-    if (error) throw new Error("Güncelleme başarısız: " + error.message);
+    if (error) {
+      console.error("[guvenlikIslemi] güncelleme hatası:", error.message);
+      throw new Error("İşlem sırasında sistemsel bir hata oluştu. Lütfen tekrar deneyin.");
+    }
 
     // Eğer kayıt güncellenmemişse, ya ID yanlıştır ya da başka kampüse aittir!
     if (!data || data.length === 0) {
@@ -212,7 +215,10 @@ export async function topluGuvenlikIslemi(talepIdListesi: number[]) {
 
     // Sessiz başarısızlığı önlemek için güncellenen kayıtları doğrula
     const { data, error } = await sorgu.select("id, ziyaretci_tc, ziyaretci_ad_soyad");
-    if (error) throw new Error("Toplu güncelleme başarısız: " + error.message);
+    if (error) {
+      console.error("[topluGuvenlikIslemi] güncelleme hatası:", error.message);
+      throw new Error("İşlem sırasında sistemsel bir hata oluştu. Lütfen tekrar deneyin.");
+    }
     if (!data || data.length === 0) {
       throw new Error("Güvenlik İhlali: Seçili kayıtlar için yetkiniz yok veya kayıtlar bulunamadı!");
     }

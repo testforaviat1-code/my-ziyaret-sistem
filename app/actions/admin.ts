@@ -2,6 +2,8 @@
 
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { hizSiniriAsildi } from "@/lib/guvenlik/rateLimit";
 
 /**
  * İdari Server Action yanıt sözleşmesi.
@@ -45,105 +47,170 @@ export interface ProfilKampusGuncellePayload {
   kampus_id: string | null;
 }
 
+const GENEL_HATA_MESAJI = "İşlem sırasında sistemsel bir hata oluştu. Lütfen tekrar deneyin.";
+const HIZ_SINIRI_MESAJI = "Çok sık istek gönderildi. Lütfen kısa süre bekleyip tekrar deneyin.";
+
 function hataMesajiAl(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
+  if (error instanceof Error) return error.message;
   return typeof error === "string" ? error : String(error);
+}
+
+/**
+ * Admin oturumu doğrular ve yetkili bir Supabase client döndürür.
+ * Yetki yoksa { supabase: null, hata } döner — çağıran action güvenli mesajı iletir.
+ */
+async function adminClientGetir(): Promise<
+  | { supabase: SupabaseClient; user: { id: string }; hata: null }
+  | { supabase: null; user: null; hata: string }
+> {
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { get(name: string) { return cookieStore.get(name)?.value; } } }
+  );
+
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) {
+    return { supabase: null, user: null, hata: "Oturum bulunamadı, lütfen tekrar giriş yapın." };
+  }
+
+  const { data: profil, error: profilError } = await supabase
+    .from("profiller")
+    .select("rol")
+    .eq("id", user.id)
+    .single();
+
+  if (profilError || !profil || profil.rol !== "admin") {
+    return { supabase: null, user: null, hata: "Güvenlik İhlali: Bu işlem için 'Admin' yetkiniz bulunmuyor!" };
+  }
+
+  return { supabase, user: { id: user.id }, hata: null };
 }
 
 /**
  * Güvenlik personelinin görev kampüsünü idari olarak günceller.
  *
- * **İş Kuralı (Business Logic):** THY Güvenlik Direktörlüğü operasyonunda, idari personelin
- * güvenlik görevlisini doğru kampüs kapısına / operasyon alanına atamasını sağlar; yanlış kampüs
- * ataması ziyaretçi giriş-çıkış sürecinde yetki ihlali riski doğurur.
- *
- * **Yetki (Access Control):** Yalnızca oturum açmış ve `profiller.rol = 'admin'` olan THY idari
- * personeli. Hedef kayıt yalnızca `guvenlik` rolündeki personel olabilir.
- *
- * @param personelId - Güncellenecek güvenlik personelinin `profiller.id` (UUID); KVKK kapsamında
- *   kişisel tanımlayıcıdır, istemci tarafında doğrulanmış oturumla eşleştirilir.
- * @param yeniKampusId - Atanacak kampüs tanımlayıcısı (`kampusler` FK); `null` görevden çekme
- *   senaryosu için kullanılabilir. Sunucu RLS ile yazma yetkisini ikinci kez doğrular.
- * @returns İşlem sonucu; `basarili: false` durumunda `mesaj` kullanıcıya gösterilir, ayrıntılı
- *   DB/RLS hataları istemciye sızdırılmadan genelleştirilir.
+ * **Yetki (Access Control):** Yalnızca `admin` rolü; hedef kayıt yalnızca `guvenlik` olabilir.
  */
 export async function personelKampusGuncelle(
   personelId: string,
   yeniKampusId: string | null
 ): Promise<AdminIslemSonuc> {
   try {
-    // Senin sistemindeki standart Supabase başlatma kodları
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) { return cookieStore.get(name)?.value; }
-        }
-      }
-    );
+    const { supabase, hata } = await adminClientGetir();
 
-    // 1. KİMLİK DOĞRULAMA: İşlemi yapan kim?
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      return { basarili: false, mesaj: "Oturum bulunamadı, lütfen tekrar giriş yapın." };
-    }
+    if (!supabase) return { basarili: false, mesaj: hata };
 
-    // 2. YETKİ KONTROLÜ: Bu kişi gerçekten Admin mi?
-    const { data: profil, error: profilError } = await supabase
+    const { data: hedefProfil, error: hedefHata } = await supabase
       .from("profiller")
       .select("rol")
-      .eq("id", user.id)
+      .eq("id", personelId)
       .single();
 
-    if (profilError || !profil || profil.rol !== "admin") {
-      return { basarili: false, mesaj: "Güvenlik İhlali: Bu işlem için 'Admin' yetkiniz bulunmuyor!" };
+    if (hedefHata || !hedefProfil) return { basarili: false, mesaj: "Personel bulunamadı." };
+    if (hedefProfil.rol !== "guvenlik") {
+      return { basarili: false, mesaj: "Sadece güvenlik personelinin kampüsü değiştirilebilir." };
     }
 
-// Güncellenecek kişi sadece "guvenlik" rolünde olmalı
-const { data: hedefProfil, error: hedefHata } = await supabase
-  .from("profiller")
-  .select("rol")
-  .eq("id", personelId)
-  .single();
-
-if (hedefHata || !hedefProfil) {
-  return { basarili: false, mesaj: "Personel bulunamadı." };
-}
-
-if (hedefProfil.rol !== "guvenlik") {
-  return { basarili: false, mesaj: "Sadece güvenlik personelinin kampüsü değiştirilebilir." };
-}
-    // 3. ASIL İŞLEM VE FATURA KONTROLÜ
-    // Güncellemeyi yap ve .select('id') ile dönen satırları geri iste!
     const guncelleme: ProfilKampusGuncellePayload = { kampus_id: yeniKampusId };
     const { data: guncellenenVeri, error: updateError } = await supabase
       .from("profiller")
       .update(guncelleme)
       .eq("id", personelId)
-      .select("id"); // İŞTE BÜYÜ BURADA: "Kimi güncelledin, kanıt göster!"
+      .select("id");
 
     if (updateError) {
-      throw new Error(updateError.message);
+      console.error("[personelKampusGuncelle] update hatası:", updateError.message);
+      return { basarili: false, mesaj: GENEL_HATA_MESAJI };
     }
 
-    // 4. SESSİZ BAŞARISIZLIK (SILENT FAILURE) KONTROLÜ
-    // Eğer Supabase RLS duvarı bizi engellerse, hata vermez ama 0 satır döner.
     if (!guncellenenVeri || guncellenenVeri.length === 0) {
-      return { 
-        basarili: false, 
-        mesaj: "Veritabanı reddetti! Personel bulunamadı veya RLS (Güvenlik) duvarı güncellemeye izin vermedi." 
+      return {
+        basarili: false,
+        mesaj: "Veritabanı reddetti: kayıt bulunamadı veya güncelleme izni yok.",
       };
     }
 
-    // Her şey kusursuzsa onayı ver.
     return { basarili: true, mesaj: "Personel kampüsü başarıyla güncellendi." };
-
   } catch (error: unknown) {
-    console.error("Kampüs Güncelleme Hatası:", error);
-    return { basarili: false, mesaj: "Sistemsel bir hata: " + hataMesajiAl(error) };
+    console.error("[personelKampusGuncelle] beklenmeyen hata:", hataMesajiAl(error));
+    return { basarili: false, mesaj: GENEL_HATA_MESAJI };
+  }
+}
+
+/**
+ * Yeni kampüs ekler. (admin)
+ */
+export async function kampusEkle(isim: string): Promise<AdminIslemSonuc> {
+  try {
+    const { supabase, user, hata } = await adminClientGetir();
+    if (!supabase) return { basarili: false, mesaj: hata }; 
+
+    if (hizSiniriAsildi(`admin-kampus-ekle:${user.id}`, 10, 60_000)) {
+      return { basarili: false, mesaj: HIZ_SINIRI_MESAJI };
+    }
+
+    const temizIsim = (isim || "").trim().toUpperCase();
+    if (!temizIsim) return { basarili: false, mesaj: "Kampüs adı boş olamaz." };
+
+    const { data, error } = await supabase
+      .from("kampusler")
+      .insert({ isim: temizIsim })
+      .select("id");
+
+    if (error) {
+      console.error("[kampusEkle] insert hatası:", error.message);
+      if (error.code === "23505") return { basarili: false, mesaj: "Bu isimde bir kampüs zaten mevcut." };
+      return { basarili: false, mesaj: GENEL_HATA_MESAJI };
+    }
+
+    if (!data || data.length === 0) {
+      return { basarili: false, mesaj: "Kampüs eklenemedi: yazma izni reddedildi." };
+    }
+
+    return { basarili: true, mesaj: "Kampüs başarıyla eklendi." };
+  } catch (error: unknown) {
+    console.error("[kampusEkle] beklenmeyen hata:", hataMesajiAl(error));
+    return { basarili: false, mesaj: GENEL_HATA_MESAJI };
+  }
+}
+
+/**
+ * Kampüs siler. (admin) — bağlı kayıt varsa FK ihlali güvenli mesaja çevrilir.
+ */
+export async function kampusSil(kampusId: number): Promise<AdminIslemSonuc> {
+  try {
+    const { supabase, user, hata } = await adminClientGetir();
+    if (!supabase) return { basarili: false, mesaj: hata };
+
+    if (hizSiniriAsildi(`admin-kampus-sil:${user.id}`, 10, 60_000)) {
+      return { basarili: false, mesaj: HIZ_SINIRI_MESAJI };
+    }
+
+    if (!kampusId) return { basarili: false, mesaj: "Geçersiz kampüs." };
+
+    const { data, error } = await supabase
+      .from("kampusler")
+      .delete()
+      .eq("id", kampusId)
+      .select("id");
+
+    if (error) {
+      console.error("[kampusSil] delete hatası:", error.message);
+      if (error.code === "23503") {
+        return { basarili: false, mesaj: "Bu kampüse bağlı kayıtlar olduğu için silinemiyor." };
+      }
+      return { basarili: false, mesaj: GENEL_HATA_MESAJI };
+    }
+
+    if (!data || data.length === 0) {
+      return { basarili: false, mesaj: "Kampüs bulunamadı veya silme izniniz yok." };
+    }
+
+    return { basarili: true, mesaj: "Kampüs başarıyla silindi." };
+  } catch (error: unknown) {
+    console.error("[kampusSil] beklenmeyen hata:", hataMesajiAl(error));
+    return { basarili: false, mesaj: GENEL_HATA_MESAJI };
   }
 }
