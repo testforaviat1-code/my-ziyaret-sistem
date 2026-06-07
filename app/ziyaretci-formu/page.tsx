@@ -143,17 +143,22 @@ export default function ZiyaretciForm() {
         }))
     ];
 
-   // --- YENİ GÜVENLİ SUNUCU KAYDI ---
+// --- YENİ GÜVENLİ SUNUCU KAYDI ---
+try {
   const sonuc = await yeniZiyaretciKaydet(tumZiyaretciler, formData.tarih, formData.saat);
 
-  setLoading(false);
-  
   if (!sonuc.basarili) {
     alert("Hata: " + sonuc.mesaj);
   } else {
     setSuccess(true);
   }
-  // ---------------------------------
+} catch (err) {
+  console.error("[handleSubmit] yeniZiyaretciKaydet hatası:", err);
+  alert("Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.");
+} finally {
+  setLoading(false);
+}
+// ---------------------------------
 };
 
   // --- BAŞARI EKRANI (GÜNCELLENDİ: YENİ BUTONLAR EKLENDİ) ---

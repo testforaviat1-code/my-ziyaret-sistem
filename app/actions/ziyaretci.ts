@@ -113,7 +113,19 @@ export async function yeniZiyaretciKaydet(ziyaretcilerArray: ZiyaretciVerisi[], 
   if (!ziyaretEdilecekKisi) {
     return { basarili: false, mesaj: "Profil kimlik bilgisi (sicil) eksik; kayıt yapılamıyor." };
   }
+// --- TC / GSM format doğrulaması (sunucu tarafı) ---
+  // Kesmeden önce ham değeri doğrula; geçersiz formatlı kayıt DB'ye yazılmaz.
+  for (const kayit of ziyaretcilerArray) {
+    const tc = String(kayit.ziyaretci_tc ?? "").trim();
+    const gsm = String(kayit.ziyaretci_gsm ?? "").trim().replace(/\s/g, "");
 
+    if (!/^\d{11}$/.test(tc) || tc[0] === "0") {
+      return { basarili: false, mesaj: "Geçersiz TC Kimlik No. 11 haneli olmalıdır." };
+    }
+    if (!/^\d{10,11}$/.test(gsm)) {
+      return { basarili: false, mesaj: "Geçersiz GSM numarası." };
+    }
+  }
   const guvenliTarih = kirp(tarih, 10);
   const guvenliSaat = kirp(saat, 32);
 

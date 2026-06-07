@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# AI tarama / snapshot çıktıları
+snapshot.txt
+repomix-output.xml
+*.repomix.xml

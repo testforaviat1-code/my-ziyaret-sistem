@@ -6,6 +6,7 @@ import {
   kaydetZiyaretKutusuLoglari,
   ziyaretKutusuIslemTipi,
 } from "@/lib/audit";
+import { hizSiniriAsildi } from "@/lib/guvenlik/rateLimit";
 
 function hataMesajiAl(error: unknown): string {
   if (error instanceof Error) {
@@ -13,6 +14,18 @@ function hataMesajiAl(error: unknown): string {
   }
   return typeof error === "string" ? error : String(error);
 }
+
+/**
+ * Güvenlik panelinden yazılabilecek geçerli operasyonel durumlar (beyaz liste).
+ *
+ * **İş Kuralı (Business Logic):** İstemciden gelen `yeniDurum` değeri yalnızca bu kümeden
+ * olabilir; `onaylandi`, `beklemede` gibi iş akışını atlatacak keyfi durum yazımı engellenir.
+ *
+ * **Yetki (Access Control):** Sunucu tarafında zorlanır; doğrulama olmadan hiçbir durum
+ * `talepler` tablosuna işlenmez.
+ */
+const GECERLI_GUVENLIK_DURUMLARI = ["iceride", "cikis_yapti", "reddedildi"] as const;
+type GuvenlikDurumu = (typeof GECERLI_GUVENLIK_DURUMLARI)[number];
 
 /**
  * Güvenlik kapısı işlemini yürüten personelin profil özeti.
@@ -86,7 +99,7 @@ export interface TalepTopluSecimSatiri extends TalepZiyaretciKimlikSatiri {
  * Oturumsuz veya `personel` rolü reddedilir.
  *
  * @param talepId - Güncellenecek `talepler.id`; yetkisiz ID ile kampüs zırhı 0 satır döndürür.
- * @param yeniDurum - Hedef operasyonel durum kodu; ret senaryosunda `reddedildi` beklenir.
+ * @param yeniDurum - Hedef operasyonel durum kodu; yalnızca beyaz listedeki değerler kabul edilir.
  * @param redNedeni - `reddedildi` durumunda gerekçe metni; KVKK kapsamında işlem detayına yazılır.
  * @returns `{ success: true }` başarıda; hata durumunda `Error` fırlatılır (istemci genel mesaj gösterir).
  */
@@ -107,6 +120,11 @@ export async function guvenlikIslemi(talepId: number, yeniDurum: string, redNede
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Giriş yetkiniz yok!");
 
+    // --- Rate limit: kullanıcı başına yüksek frekanslı işlem / audit flood koruması ---
+    if (hizSiniriAsildi(`guvenlik-islem:${user.id}`, 30, 60_000)) {
+      throw new Error("Çok sık istek gönderildi. Lütfen biraz bekleyin.");
+    }
+
     // GÜNCELLEME 1: kampus_id çekiliyor
     const { data: profil } = await supabase.from('profiller').select('tam_ad, rol, kampus_id').eq('id', user.id).single();
     if (!profil || (profil.rol !== 'guvenlik' && profil.rol !== 'admin')) {
@@ -114,6 +132,14 @@ export async function guvenlikIslemi(talepId: number, yeniDurum: string, redNede
     }
 
     const profilOzet = profil as ProfilGuvenlikOzeti;
+
+    // --- Durum beyaz listesi: istemci keyfi durum yazarak iş akışını atlatamaz ---
+    if (!GECERLI_GUVENLIK_DURUMLARI.includes(yeniDurum as GuvenlikDurumu)) {
+      throw new Error("Geçersiz işlem durumu.");
+    }
+    if (yeniDurum === 'reddedildi' && !redNedeni.trim()) {
+      throw new Error("Red işlemi için gerekçe zorunludur.");
+    }
 
     const payload: TalepGuvenlikGuncellePayload = { durum: yeniDurum, islem_yapan_guvenlik: profilOzet.tam_ad };
     if (yeniDurum === 'reddedildi') payload.red_nedeni = redNedeni;
@@ -197,6 +223,11 @@ export async function topluGuvenlikIslemi(talepIdListesi: number[]) {
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Yetkisiz işlem!");
+
+    // --- Rate limit: toplu işlemde flood / kaynak tüketimi koruması ---
+    if (hizSiniriAsildi(`guvenlik-toplu:${user.id}`, 15, 60_000)) {
+      throw new Error("Çok sık istek gönderildi. Lütfen biraz bekleyin.");
+    }
 
     // GÜNCELLEME 3: kampus_id çekiliyor
     const { data: profil } = await supabase.from('profiller').select('tam_ad, rol, kampus_id').eq('id', user.id).single();
